@@ -1,8 +1,10 @@
 /********************************************************************************
- * --- FILE: server/index.js (FINAL - CORRECTED) ---
+ * --- FILE: server/index.js (FINAL - PRODUCTION SECURE) ---
  ********************************************************************************/
-// This is the final version of your server file. The incorrect references to the
-// deleted teams.js route have been removed, permanently fixing the crash.
+// This is the final version of your server file. The CORS configuration has been
+// updated to be stricter for production, removing the automatic allowance for
+// local network IPs (WLAN). It now ONLY allows URLs specified in your
+// ALLOW_ORIGIN environment variable.
 
 import express from "express";
 import mongoose from "mongoose";
@@ -24,20 +26,22 @@ import poolRoutes from "./routes/pools.js";
 const app = express();
 const httpServer = createServer(app);
 
-// --- DYNAMIC CORS Configuration ---
-const productionOrigins = ALLOW_ORIGIN.split(",").map((origin) =>
-  origin.trim()
-);
+// --- PRODUCTION-SECURE CORS Configuration ---
+// This reads the ALLOW_ORIGIN variable from your environment (e.g., on Render)
+// and splits it into an array of approved URLs.
+const allowedOrigins = ALLOW_ORIGIN.split(",").map((origin) => origin.trim());
 
 const corsOptions = {
+  // The origin function checks if an incoming request's origin is on our guest list
   origin: function (origin, callback) {
-    const isPrivateNetwork =
-      /^(http:\/\/)?(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|localhost):\d{4,5}$/.test(
-        origin
-      );
-    if (!origin || productionOrigins.includes(origin) || isPrivateNetwork) {
+    // Allow requests with no origin (e.g., from tools like Postman)
+    if (!origin) return callback(null, true);
+
+    // If the origin is in our explicitly allowed list, allow it.
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
+      // Otherwise, reject it
       return callback(new Error("Not allowed by CORS"));
     }
   },
