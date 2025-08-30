@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import Tournament from "../models/Tournament.js";
 import { JWT_SECRET } from "../../config.js";
 import { auth } from "../middleware/auth.js";
+import Submission from "../models/Submission.js";
 
 const r = Router();
 
@@ -17,11 +18,9 @@ r.post("/seed-admin", async (req, res) => {
   // Check if any admin user already exists
   const adminCount = await User.countDocuments();
   if (adminCount > 0) {
-    return res
-      .status(403)
-      .json({
-        error: "An admin account already exists. Seeding is only allowed once.",
-      });
+    return res.status(403).json({
+      error: "An admin account already exists. Seeding is only allowed once.",
+    });
   }
 
   const ph = await bcrypt.hash(password, 10);
@@ -85,6 +84,7 @@ r.get("/me/team", auth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   try {
     const { tournamentId, teamId } = req.user;
+
     const tournament = await Tournament.findById(tournamentId).populate(
       "teams.players"
     );
@@ -94,8 +94,17 @@ r.get("/me/team", auth, async (req, res) => {
     const teamSubDoc = tournament.teams.id(teamId);
     if (!teamSubDoc) return res.status(404).json({ error: "Team not found" });
 
+    // --- NEW LOGIC ---
+    // After finding the team, find their corresponding submission document.
+    const submission = await Submission.findOne({ team: teamId }).populate(
+      "squad playingXI captain viceCaptain"
+    );
+
     const teamObject = teamSubDoc.toObject();
     teamObject.tournament = tournament._id;
+    // Attach the submission to the data object before sending it.
+    teamObject.submission = submission;
+
     res.json(teamObject);
   } catch (e) {
     console.error("Error fetching team 'me':", e);

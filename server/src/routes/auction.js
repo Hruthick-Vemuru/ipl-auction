@@ -1,5 +1,5 @@
 import { Router } from "express";
-import Tournament from "../models/Tournament.js"; // Import Tournament INSTEAD of Team
+import Tournament from "../models/Tournament.js";
 import Player from "../models/Player.js";
 import Pool from "../models/Pool.js";
 import { auth } from "../middleware/auth.js";
@@ -7,6 +7,7 @@ import { updateAndBroadcastState } from "../socket.js";
 
 const r = Router();
 
+// Helper functions
 const parseCurrency = (amount) => {
   if (!amount || typeof amount.value === "undefined" || !amount.unit) return 0;
   const value = parseFloat(amount.value);
@@ -32,7 +33,6 @@ const getNextPlayer = async (io, tournamentId) => {
   return currentPool?.players[0] || null;
 };
 
-// Admin starts the auction for a specific pool
 r.post("/start-pool", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -90,7 +90,6 @@ r.post("/sell", auth, async (req, res) => {
     if (!tournament || !player)
       return res.status(404).json({ error: "Tournament or Player not found" });
 
-    // Find the team as a sub-document within the tournament
     const team = tournament.teams.id(teamId);
     if (!team)
       return res
@@ -108,17 +107,28 @@ r.post("/sell", auth, async (req, res) => {
 
     team.purseRemaining -= priceAmount;
     team.players.push(player._id);
-
-    // Save the parent tournament document to persist the change to the team
     await tournament.save();
 
+    const updatedTournament = await Tournament.findById(tournamentId).populate(
+      "teams.players"
+    );
+    io.to(tournamentId).emit("squad_update", updatedTournament.teams);
+
+    // --- THIS IS THE CORRECTED LOGIC ---
     const currentState = io.auctionState.get(tournamentId);
-    const nextPlayer = await getNextPlayer(io, tournamentId);
+    const currentPool = await Pool.findOne({
+      tournament: tournamentId,
+      name: currentState.currentPool,
+    }).populate("players");
+    const upcomingPlayers = currentPool.players.filter(
+      (p) => p.status === "Available"
+    );
+
+    const nextPlayer = upcomingPlayers.shift(); // The actual next player
 
     let logMessage = `${player.name} sold to ${team.name} for ${formatCurrency(
       priceAmount
     )}.`;
-
     if (!nextPlayer) {
       logMessage += ` Pool "${currentState.currentPool}" is finished.`;
     } else {
@@ -128,6 +138,7 @@ r.post("/sell", auth, async (req, res) => {
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
       currentBid: nextPlayer ? nextPlayer.basePrice : 0,
+      upcomingPlayers: upcomingPlayers.slice(0, 5), // Send the new, correct upcoming list
       log: [...(currentState.log || []), logMessage],
     });
 
@@ -138,7 +149,6 @@ r.post("/sell", auth, async (req, res) => {
   }
 });
 
-// Admin marks a player as unsold
 r.post("/unsold", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
