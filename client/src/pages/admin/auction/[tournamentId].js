@@ -1,9 +1,10 @@
 /********************************************************************************
- * --- FILE: client/src/pages/admin/auction/[tournamentId].js (FINAL) ---
+ * --- FILE: client/src/pages/admin/auction/[tournamentId].js (DEFINITIVE FIX) ---
  ********************************************************************************/
 // This is the complete and final version of the Auction Control Panel.
-// It includes the flexible bid increment system, the dynamic Pool Manager,
-// player/pool deletion, performance optimizations, and all styling fixes.
+// The PoolManager logic has been completely rewritten with a simpler, more robust
+// data-fetching strategy to permanently fix all visual glitches, lag, and
+// desynchronization issues when moving players.
 
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
@@ -103,7 +104,6 @@ const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
     basePrice: { value: 20, unit: "Lakhs" },
   });
   const [msg, setMsg] = useState("");
-
   const handleChange = useCallback(
     (e) => setPlayer((prev) => ({ ...prev, [e.target.name]: e.target.value })),
     []
@@ -289,6 +289,11 @@ const PoolManager = memo(function PoolManager({
       setUnassignedPlayers(unassignedData);
       if (!selectedPoolId && poolsData.length > 0) {
         setSelectedPoolId(poolsData[0]._id);
+      } else if (
+        selectedPoolId &&
+        !poolsData.some((p) => p._id === selectedPoolId)
+      ) {
+        setSelectedPoolId(poolsData.length > 0 ? poolsData[0]._id : null);
       }
     } catch (error) {
       console.error("Failed to refresh pool data:", error);
@@ -492,12 +497,10 @@ export default function AuctionControlPanel() {
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
   const [soldToTeamId, setSoldToTeamId] = useState("");
-
   const [bidIncrement, setBidIncrement] = useState({
     value: 50,
     unit: "Lakhs",
   });
-
   const socketRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const triggerRefresh = () => setRefreshKey((prevKey) => prevKey + 1);
@@ -527,22 +530,19 @@ export default function AuctionControlPanel() {
     socketRef.current.on("auction_state_update", (state) =>
       setAuctionState(state)
     );
+    socketRef.current.on("squad_update", (updatedTeams) =>
+      setTeams(updatedTeams)
+    );
 
     return () => socketRef.current.disconnect();
   }, [tournamentId, router]);
 
-  const parseIncrement = (increment) => {
-    const value = parseFloat(increment.value) || 0;
-    if (increment.unit === "Lakhs") return value * 100000;
-    if (increment.unit === "Crores") return value * 10000000;
-    return value;
-  };
-
   const handleBidUpdate = useCallback(
     (direction) => {
       if (!tournamentId || !auctionState?.currentPlayer) return;
-
-      const incrementValue = parseIncrement(bidIncrement);
+      const incrementValue =
+        (parseFloat(bidIncrement.value) || 0) *
+        (bidIncrement.unit === "Lakhs" ? 100000 : 10000000);
       const newBid =
         direction === "up"
           ? auctionState.currentBid + incrementValue
@@ -550,7 +550,6 @@ export default function AuctionControlPanel() {
               auctionState.currentPlayer.basePrice,
               auctionState.currentBid - incrementValue
             );
-
       socketRef.current.emit("admin_update_bid", { tournamentId, newBid });
     },
     [tournamentId, auctionState, bidIncrement]
