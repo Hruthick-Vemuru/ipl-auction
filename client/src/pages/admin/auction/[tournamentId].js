@@ -1,15 +1,15 @@
 /********************************************************************************
- * --- FILE: client/src/pages/admin/auction/[tournamentId].js (DEFINITIVE FIX) ---
+ * --- FILE: client/src/pages/admin/auction/[tournamentId].js (FINAL) ---
  ********************************************************************************/
 // This is the complete and final version of the Auction Control Panel.
-// The data refreshing logic has been re-architected to be simple and reliable,
-// permanently fixing the "Start Auction" button bug and other data sync issues.
+// It includes the flexible bid increment system, the dynamic Pool Manager,
+// player/pool deletion, performance optimizations, and all styling fixes.
 
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { api, getToken } from "../../../lib/api";
 import { io } from "socket.io-client";
-import Link from "next/link";
 import { formatCurrency } from "../../../lib/utils";
 
 // --- Reusable Notification Component ---
@@ -103,6 +103,7 @@ const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
     basePrice: { value: 20, unit: "Lakhs" },
   });
   const [msg, setMsg] = useState("");
+
   const handleChange = useCallback(
     (e) => setPlayer((prev) => ({ ...prev, [e.target.name]: e.target.value })),
     []
@@ -288,11 +289,6 @@ const PoolManager = memo(function PoolManager({
       setUnassignedPlayers(unassignedData);
       if (!selectedPoolId && poolsData.length > 0) {
         setSelectedPoolId(poolsData[0]._id);
-      } else if (
-        selectedPoolId &&
-        !poolsData.some((p) => p._id === selectedPoolId)
-      ) {
-        setSelectedPoolId(poolsData.length > 0 ? poolsData[0]._id : null);
       }
     } catch (error) {
       console.error("Failed to refresh pool data:", error);
@@ -496,8 +492,13 @@ export default function AuctionControlPanel() {
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
   const [soldToTeamId, setSoldToTeamId] = useState("");
-  const [soldPrice, setSoldPrice] = useState({ value: 0, unit: "Lakhs" });
 
+  const [bidIncrement, setBidIncrement] = useState({
+    value: 50,
+    unit: "Lakhs",
+  });
+
+  const socketRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const triggerRefresh = () => setRefreshKey((prevKey) => prevKey + 1);
 
@@ -516,33 +517,44 @@ export default function AuctionControlPanel() {
       return;
     }
 
-    api.tournaments
-      .getById(tournamentId)
-      .then(setTournament)
-      .catch((e) => console.error(e));
-    api.tournaments
-      .getTeams(tournamentId)
-      .then(setTeams)
-      .catch((e) => console.error(e));
+    api.tournaments.getById(tournamentId).then(setTournament);
+    api.tournaments.getTeams(tournamentId).then(setTeams);
 
-    const socket = io(
+    socketRef.current = io(
       process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000"
     );
-    socket.emit("join_tournament", tournamentId);
-    socket.on("auction_state_update", (state) => setAuctionState(state));
-    return () => socket.disconnect();
+    socketRef.current.emit("join_tournament", tournamentId);
+    socketRef.current.on("auction_state_update", (state) =>
+      setAuctionState(state)
+    );
+
+    return () => socketRef.current.disconnect();
   }, [tournamentId, router]);
 
-  useEffect(() => {
-    if (auctionState?.currentPlayer) {
-      const base = auctionState.currentPlayer.basePrice;
-      if (base >= 10000000) {
-        setSoldPrice({ value: base / 10000000, unit: "Crores" });
-      } else {
-        setSoldPrice({ value: base / 100000, unit: "Lakhs" });
-      }
-    }
-  }, [auctionState?.currentPlayer]);
+  const parseIncrement = (increment) => {
+    const value = parseFloat(increment.value) || 0;
+    if (increment.unit === "Lakhs") return value * 100000;
+    if (increment.unit === "Crores") return value * 10000000;
+    return value;
+  };
+
+  const handleBidUpdate = useCallback(
+    (direction) => {
+      if (!tournamentId || !auctionState?.currentPlayer) return;
+
+      const incrementValue = parseIncrement(bidIncrement);
+      const newBid =
+        direction === "up"
+          ? auctionState.currentBid + incrementValue
+          : Math.max(
+              auctionState.currentPlayer.basePrice,
+              auctionState.currentBid - incrementValue
+            );
+
+      socketRef.current.emit("admin_update_bid", { tournamentId, newBid });
+    },
+    [tournamentId, auctionState, bidIncrement]
+  );
 
   const startPool = useCallback(
     async (poolId) => {
@@ -559,25 +571,34 @@ export default function AuctionControlPanel() {
     [tournamentId]
   );
 
-  const handleSellPlayer = useCallback(async () => {
-    const { currentPlayer } = auctionState;
-    if (!soldToTeamId || !soldPrice.value || !currentPlayer) return;
-    try {
-      await api.auction.sellPlayer(
-        tournamentId,
-        currentPlayer._id,
-        soldToTeamId,
-        soldPrice
-      );
-      setNotification({
-        message: `${currentPlayer.name} sold successfully!`,
-        type: "success",
-      });
-      setSoldToTeamId("");
-    } catch (e) {
-      setNotification({ message: "Error: " + e.message, type: "error" });
-    }
-  }, [auctionState, soldToTeamId, soldPrice, tournamentId]);
+  const handleSellPlayer = useCallback(
+    async (finalPrice) => {
+      const { currentPlayer } = auctionState;
+      if (!soldToTeamId || !finalPrice || !currentPlayer) return;
+      try {
+        const pricePayload = { value: finalPrice / 100000, unit: "Lakhs" };
+        if (finalPrice >= 10000000) {
+          pricePayload.value = finalPrice / 10000000;
+          pricePayload.unit = "Crores";
+        }
+        await api.auction.sellPlayer(
+          tournamentId,
+          currentPlayer._id,
+          soldToTeamId,
+          pricePayload
+        );
+        setNotification({
+          message: `${currentPlayer.name} sold successfully!`,
+          type: "success",
+        });
+        setSoldToTeamId("");
+        triggerRefresh();
+      } catch (e) {
+        setNotification({ message: "Error: " + e.message, type: "error" });
+      }
+    },
+    [auctionState, soldToTeamId, tournamentId]
+  );
 
   const handleUnsoldPlayer = useCallback(async () => {
     const { currentPlayer } = auctionState;
@@ -588,6 +609,7 @@ export default function AuctionControlPanel() {
         message: `${currentPlayer.name} is unsold.`,
         type: "success",
       });
+      triggerRefresh();
     } catch (e) {
       setNotification({ message: "Error: " + e.message, type: "error" });
     }
@@ -670,34 +692,73 @@ export default function AuctionControlPanel() {
                 {formatCurrency(auctionState.currentPlayer.basePrice)}
               </p>
 
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="my-6 p-4 bg-black/30 rounded-lg text-center border border-gray-600">
+                <p className="text-5xl font-bold text-green-400 transition-colors duration-300">
+                  {formatCurrency(auctionState.currentBid)}
+                </p>
+                <div className="flex items-center justify-center gap-4 mt-4">
+                  <button
+                    onClick={() => handleBidUpdate("down")}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 rounded-md font-bold text-2xl transition-transform transform active:scale-95"
+                  >
+                    -
+                  </button>
+                  <div className="w-48">
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Increment
+                    </label>
+                    <CurrencyInput
+                      value={bidIncrement.value}
+                      unit={bidIncrement.unit}
+                      onValueChange={(e) =>
+                        setBidIncrement((prev) => ({
+                          ...prev,
+                          value: e.target.value,
+                        }))
+                      }
+                      onUnitChange={(e) =>
+                        setBidIncrement((prev) => ({
+                          ...prev,
+                          unit: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleBidUpdate("up")}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-bold text-2xl transition-transform transform active:scale-95"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <select
                   value={soldToTeamId}
                   onChange={(e) => setSoldToTeamId(e.target.value)}
                   className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
                 >
-                  <option value="">-- Select Team to Sell --</option>
+                  <option value="">-- Winning Team --</option>
                   {teams.map((t) => (
                     <option key={t._id} value={t._id}>
                       {t.name}
                     </option>
                   ))}
                 </select>
-                <CurrencyInput
-                  value={soldPrice.value}
-                  unit={soldPrice.unit}
-                  onValueChange={(e) =>
-                    setSoldPrice((prev) => ({ ...prev, value: e.target.value }))
-                  }
-                  onUnitChange={(e) =>
-                    setSoldPrice((prev) => ({ ...prev, unit: e.target.value }))
-                  }
+                <input
+                  type="text"
+                  readOnly
+                  value={`Final Price: ${formatCurrency(
+                    auctionState.currentBid
+                  )}`}
+                  className="w-full p-2 bg-gray-900 border border-gray-700 rounded-md text-center"
                 />
               </div>
 
               <div className="mt-4 flex gap-4">
                 <button
-                  onClick={handleSellPlayer}
+                  onClick={() => handleSellPlayer(auctionState.currentBid)}
                   className="flex-1 py-3 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
                 >
                   Mark as Sold

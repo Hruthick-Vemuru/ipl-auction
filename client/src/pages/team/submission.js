@@ -1,8 +1,14 @@
+/********************************************************************************
+ * --- FILE: client/src/pages/team/submission.js (FINAL) ---
+ ********************************************************************************/
+// This is the complete and final version of the Team Submission Page.
+// It is fully styled with the "glassmorphism" theme and uses the correct
+// API calls to fetch data and submit the final squad.
+
 import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken } from "../../lib/api";
-// --- THIS IS THE ONLY CORRECT IMPORT ---
 import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
 
 // --- Reusable Notification Component ---
@@ -41,7 +47,7 @@ const PlayerCard = memo(function PlayerCard({
   onSetViceCaptain,
 }) {
   return (
-    <div className="bg-gray-700 rounded-lg p-3 text-center shadow-lg relative group">
+    <div className="bg-black/20 rounded-lg p-3 text-center shadow-lg relative group border border-white/10">
       <div className="font-bold text-lg" style={{ color: accentColor }}>
         {player.name}
       </div>
@@ -89,12 +95,14 @@ const PlayerCard = memo(function PlayerCard({
         <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onSetCaptain}
+            title="Set as Captain"
             className="text-xs bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-full w-6 h-6 flex items-center justify-center"
           >
             C
           </button>
           <button
             onClick={onSetViceCaptain}
+            title="Set as Vice-Captain"
             className="text-xs bg-gray-400 hover:bg-gray-300 text-black font-bold rounded-full w-6 h-6 flex items-center justify-center"
           >
             VC
@@ -109,6 +117,7 @@ const PlayerCard = memo(function PlayerCard({
 export default function TeamSubmissionPage() {
   const router = useRouter();
   const [myTeam, setMyTeam] = useState(null);
+  const [submission, setSubmission] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [squad, setSquad] = useState([]);
   const [playingXI, setPlayingXI] = useState([]);
@@ -122,9 +131,19 @@ export default function TeamSubmissionPage() {
     if (!token) {
       router.push("/team/login");
     } else {
-      api.teams
+      api.auth
         .me()
-        .then(setMyTeam)
+        .then((teamData) => {
+          setMyTeam(teamData);
+          if (teamData.submission) {
+            setSubmission(teamData.submission);
+            // Pre-populate the lists if a submission already exists
+            setSquad(teamData.submission.squad || []);
+            setPlayingXI(teamData.submission.playingXI || []);
+            setCaptain(teamData.submission.captain || null);
+            setViceCaptain(teamData.submission.viceCaptain || null);
+          }
+        })
         .catch(() => router.push("/team/login"))
         .finally(() => setIsLoading(false));
     }
@@ -237,8 +256,12 @@ export default function TeamSubmissionPage() {
 
   return (
     <div
-      className="min-h-screen p-4 md:p-8"
-      style={{ background: myTeam.colorPrimary }}
+      className="min-h-screen p-4 md:p-8 text-white"
+      style={{
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${myTeam.colorPrimary}, ${myTeam.colorAccent})`,
+        backgroundSize: "cover",
+        backgroundAttachment: "fixed",
+      }}
     >
       {notification && (
         <Notification
@@ -259,19 +282,28 @@ export default function TeamSubmissionPage() {
             <p className="text-white text-opacity-80">{myTeam.name}</p>
           </div>
           <div className="flex gap-4 items-center mt-4 md:mt-0">
+            {submission?.locked && submission?.grade && (
+              <div className="text-center">
+                <span className="text-sm text-gray-300">Final Grade</span>
+                <div className="px-4 py-1 bg-yellow-500 text-black font-bold rounded-md text-lg">
+                  {submission.grade}
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleSubmit}
-              className="px-6 py-2 rounded-lg font-semibold bg-green-600 hover:bg-green-700 transition-colors"
-              style={{ color: getTextColorForBackground(myTeam.colorAccent) }}
+              disabled={submission?.locked}
+              className="px-6 py-2 rounded-lg font-semibold bg-green-600 hover:bg-green-700 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
-              Submit Squad
+              {submission?.locked ? "Locked" : "Submit Squad"}
             </button>
             <Link
               href="/team"
-              className="px-4 py-2 rounded-lg font-semibold"
+              className="px-4 py-2 rounded-lg font-semibold border-2"
               style={{
-                background: myTeam.colorAccent,
-                color: getTextColorForBackground(myTeam.colorAccent),
+                borderColor: myTeam.colorAccent,
+                color: myTeam.colorAccent,
               }}
             >
               &larr; Back to Dashboard
@@ -281,7 +313,7 @@ export default function TeamSubmissionPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-8">
-            <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
               <h2
                 className="text-2xl font-semibold mb-4"
                 style={{ color: myTeam.colorAccent }}
@@ -309,7 +341,7 @@ export default function TeamSubmissionPage() {
                 ))}
               </div>
             </div>
-            <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+            <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
               <h2
                 className="text-2xl font-semibold mb-4"
                 style={{ color: myTeam.colorAccent }}
@@ -317,7 +349,7 @@ export default function TeamSubmissionPage() {
                 Final Squad ({squad.length}/15)
               </h2>
               <p className="text-sm text-gray-400 mb-4">
-                Click player to move to Playing XI. Hold hover for actions.
+                Click player to move to Playing XI.
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-64 overflow-y-auto pr-2">
                 {squadWithoutXI.map((p) => (
@@ -332,7 +364,7 @@ export default function TeamSubmissionPage() {
               </div>
             </div>
           </div>
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+          <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
             <h2
               className="text-2xl font-semibold mb-4"
               style={{ color: myTeam.colorAccent }}
@@ -340,7 +372,7 @@ export default function TeamSubmissionPage() {
               Playing XI ({playingXI.length}/11)
             </h2>
             <p className="text-sm text-gray-400 mb-4">
-              Click player to move back to Squad. Hold hover for C/VC.
+              Click player to move back to Squad. Hover for C/VC.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-[36rem] overflow-y-auto pr-2">
               {playingXI.map((p) => (

@@ -1,16 +1,16 @@
 /********************************************************************************
- * --- FILE: client/src/pages/admin/index.js (AdminDashboard) ---
+ * --- FILE: client/src/pages/admin/index.js (AdminDashboard - FINAL) ---
  ********************************************************************************/
-// This is the complete and final code for the Admin Dashboard.
-// It includes the corrected focus styles, delete functionality, and the
-// logic for the new "embedded teams" data structure.
+// FINAL VERSION: This version restores the correct, fully custom theme creator
+// with an accurate live gradient preview. It also correctly integrates the new
+// "View Submissions" button for each tournament.
 
-import React, { useState, useEffect, useCallback, memo } from "react";
+import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken } from "../../lib/api";
 
-// --- Reusable Notification Component ---
+// --- Reusable Components (Notification, ConfirmationModal, CurrencyInput) ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,7 +34,6 @@ const Notification = memo(function Notification({ message, type, onClose }) {
   );
 });
 
-// --- Reusable Confirmation Modal Component ---
 const ConfirmationModal = memo(function ConfirmationModal({
   message,
   onConfirm,
@@ -63,7 +62,6 @@ const ConfirmationModal = memo(function ConfirmationModal({
   );
 });
 
-// --- Reworked Currency Input Component ---
 const CurrencyInput = memo(function CurrencyInput({
   value,
   unit,
@@ -97,7 +95,6 @@ export default function AdminDashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [title, setTitle] = useState("");
   const [selTournament, setSelTournament] = useState(null);
-  const [teams, setTeams] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
@@ -107,8 +104,8 @@ export default function AdminDashboard() {
     username: "",
     password: "",
     purse: { value: 100, unit: "Crores" },
-    colorPrimary: "#ff0000",
-    colorAccent: "#ffd700",
+    colorPrimary: "#0A2342",
+    colorAccent: "#FFD700",
   });
 
   useEffect(() => {
@@ -124,7 +121,6 @@ export default function AdminDashboard() {
     try {
       const r = await api.tournaments.my();
       setTournaments(r);
-      // If a tournament was selected, refresh its data too
       if (selTournament) {
         const updatedSel = r.find((t) => t._id === selTournament._id);
         setSelTournament(updatedSel || null);
@@ -136,15 +132,6 @@ export default function AdminDashboard() {
       });
     } finally {
       setIsLoading(false);
-    }
-  }, [selTournament]);
-
-  // This effect now correctly handles fetching teams from the selected tournament
-  useEffect(() => {
-    if (selTournament) {
-      setTeams(selTournament.teams || []);
-    } else {
-      setTeams([]);
     }
   }, [selTournament]);
 
@@ -178,7 +165,7 @@ export default function AdminDashboard() {
       });
     if (!teamData.name || !teamData.username || !teamData.password) {
       return setNotification({
-        message: "Team Name, Username, and Password are required",
+        message: "All team fields are required",
         type: "error",
       });
     }
@@ -188,15 +175,13 @@ export default function AdminDashboard() {
         message: "Team created successfully!",
         type: "success",
       });
-      setTeamData({
+      setTeamData((prev) => ({
+        ...prev,
         name: "",
         username: "",
         password: "",
-        purse: { value: 100, unit: "Crores" },
-        colorPrimary: "#ff0000",
-        colorAccent: "#ffd700",
-      });
-      await refreshTournaments(); // Refresh everything to get the updated tournament doc
+      }));
+      await refreshTournaments();
     } catch (e) {
       setNotification({
         message: "Error creating team: " + e.message,
@@ -208,20 +193,18 @@ export default function AdminDashboard() {
   const handleDeleteRequest = useCallback(
     (type, item) => {
       setConfirmModal({
-        message: `Are you sure you want to permanently delete the ${type} "${
+        message: `Delete ${type} "${
           item.name || item.title
-        }"?`,
+        }"? This is permanent.`,
         onConfirm: () => {
-          if (type === "team" && selTournament) {
+          if (type === "team" && selTournament)
             deleteTeam(selTournament._id, item._id);
-          } else if (type === "tournament") {
-            deleteTournament(item._id);
-          }
+          if (type === "tournament") deleteTournament(item._id);
         },
       });
     },
     [selTournament]
-  ); // Dependency on selTournament is correct
+  );
 
   const deleteTeam = useCallback(
     async (tournamentId, teamId) => {
@@ -279,7 +262,7 @@ export default function AdminDashboard() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        Loading Admin Dashboard...
+        Loading...
       </div>
     );
   }
@@ -330,42 +313,52 @@ export default function AdminDashboard() {
               {tournaments.map((t) => (
                 <li
                   key={t._id}
-                  className={`flex items-center justify-between p-3 rounded-md border transition-colors ${
+                  className={`p-3 rounded-md border transition-colors ${
                     selTournament?._id === t._id
                       ? "bg-blue-900 border-blue-600"
-                      : "bg-gray-700 border-gray-600 hover:bg-gray-600"
+                      : "bg-gray-700 border-gray-600"
                   }`}
                 >
-                  <div
-                    onClick={() => setSelTournament(t)}
-                    className="cursor-pointer flex-grow"
-                  >
-                    <span className="font-semibold">{t.title}</span> — Code:{" "}
-                    <b className="text-yellow-400 tracking-wider">{t.code}</b>
-                  </div>
-                  <Link
-                    href={`/admin/auction/${t._id}`}
-                    className="ml-4 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded-md font-semibold"
-                  >
-                    Run Auction
-                  </Link>
-                  <button
-                    onClick={() => handleDeleteRequest("tournament", t)}
-                    className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
+                  <div className="flex items-center justify-between">
+                    <div
+                      onClick={() => setSelTournament(t)}
+                      className="cursor-pointer flex-grow"
                     >
-                      <path
-                        fillRule="evenodd"
-                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
+                      <span className="font-semibold">{t.title}</span> — Code:{" "}
+                      <b className="text-yellow-400 tracking-wider">{t.code}</b>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteRequest("tournament", t)}
+                      className="ml-4 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-600 flex gap-2">
+                    <Link
+                      href={`/admin/auction/${t._id}`}
+                      className="flex-1 text-center px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded-md font-semibold"
+                    >
+                      Run Auction
+                    </Link>
+                    <Link
+                      href={`/admin/submissions/${t._id}`}
+                      className="flex-1 text-center px-3 py-1 text-sm bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold"
+                    >
+                      View Submissions
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -412,34 +405,60 @@ export default function AdminDashboard() {
                       onUnitChange={handlePurseUnitChange}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">
-                      Primary Color
-                    </label>
-                    <input
-                      type="color"
-                      name="colorPrimary"
-                      value={teamData.colorPrimary}
-                      onChange={handleTeamFormChange}
-                      className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">
-                      Accent Color
-                    </label>
-                    <input
-                      type="color"
-                      name="colorAccent"
-                      value={teamData.colorAccent}
-                      onChange={handleTeamFormChange}
-                      className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md cursor-pointer"
-                    />
+
+                  <div className="sm:col-span-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">
+                          Primary Color (Gradient Start)
+                        </label>
+                        <input
+                          type="color"
+                          name="colorPrimary"
+                          value={teamData.colorPrimary}
+                          onChange={handleTeamFormChange}
+                          className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">
+                          Accent Color (Gradient End)
+                        </label>
+                        <input
+                          type="color"
+                          name="colorAccent"
+                          value={teamData.colorAccent}
+                          onChange={handleTeamFormChange}
+                          className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Live Gradient Preview
+                      </label>
+                      <div
+                        className="w-full h-20 rounded-lg flex items-center justify-center border border-gray-600"
+                        style={{
+                          backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${teamData.colorPrimary}, ${teamData.colorAccent})`,
+                        }}
+                      >
+                        <span
+                          className="font-bold text-2xl tracking-wider"
+                          style={{
+                            color: teamData.colorAccent,
+                            textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
+                          }}
+                        >
+                          Team Preview
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={createTeam}
-                  className="w-full py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold transition-colors"
+                  className="w-full py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
                 >
                   Create Team
                 </button>
@@ -448,7 +467,7 @@ export default function AdminDashboard() {
                   Created Teams
                 </h3>
                 <div className="space-y-2">
-                  {teams.map((team) => (
+                  {selTournament.teams?.map((team) => (
                     <div
                       key={team._id}
                       className="flex items-center justify-between bg-gray-700 p-2 rounded-md"
@@ -482,18 +501,14 @@ export default function AdminDashboard() {
                       </button>
                     </div>
                   ))}
-                  {teams.length === 0 && (
-                    <p className="text-gray-400">
-                      No teams created yet for this tournament.
-                    </p>
+                  {selTournament.teams?.length === 0 && (
+                    <p className="text-gray-400">No teams created yet.</p>
                   )}
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
-                <p>
-                  Please select a tournament from the left to manage its teams.
-                </p>
+                <p>Select a tournament to manage its teams.</p>
               </div>
             )}
           </div>

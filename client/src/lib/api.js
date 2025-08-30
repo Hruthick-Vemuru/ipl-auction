@@ -1,5 +1,4 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
-
 let token = null;
 
 export function setToken(t) {
@@ -51,6 +50,8 @@ export const api = {
       }),
     seedAdmin: (email, password, name) =>
       req("/api/auth/seed-admin", "POST", { email, password, name }),
+    // --- THIS IS THE CORRECT FUNCTION ---
+    me: () => req("/api/auth/me/team"),
   },
   tournaments: {
     create: (payload) => req("/api/tournaments", "POST", payload),
@@ -63,13 +64,6 @@ export const api = {
       req(`/api/tournaments/${tournamentId}/teams/${teamId}`, "DELETE"),
     delete: (tournamentId) => req(`/api/tournaments/${tournamentId}`, "DELETE"),
   },
-
-  // --- The `teams` object now only contains the corrected `me` function ---
-  teams: {
-    // --- THIS FUNCTION HAS BEEN CORRECTED ---
-    me: () => req("/api/auth/me/team"),
-  },
-
   players: {
     list: (q = "") => req("/api/players" + q),
     create: (p) => req("/api/players", "POST", p),
@@ -95,5 +89,14 @@ export const api = {
       }),
     unsoldPlayer: (tournamentId, playerId) =>
       req("/api/auction/unsold", "POST", { tournamentId, playerId }),
+  },
+  submissions: {
+    submit: (payload) => req("/api/submissions/submit", "POST", payload),
+    getByTournament: (tournamentId) =>
+      req(`/api/submissions/tournament/${tournamentId}`),
+    lock: (teamId, locked) =>
+      req("/api/submissions/lock", "POST", { teamId, locked }),
+    grade: (teamId, grade) =>
+      req("/api/submissions/grade", "POST", { teamId, grade }),
   },
 };
