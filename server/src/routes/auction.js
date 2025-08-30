@@ -1,3 +1,10 @@
+/********************************************************************************
+ * --- FILE: server/src/routes/auction.js (FINAL CORRECTED) ---
+ ********************************************************************************/
+// FINAL VERSION: The logic for the '/unsold' route has been completed.
+// It now correctly finds the next player and updates the auction state for all
+// users, ensuring the auction continues smoothly after a player is unsold.
+
 import { Router } from "express";
 import Tournament from "../models/Tournament.js";
 import Player from "../models/Player.js";
@@ -7,7 +14,7 @@ import { updateAndBroadcastState } from "../socket.js";
 
 const r = Router();
 
-// Helper functions
+// --- Helper Functions ---
 const parseCurrency = (amount) => {
   if (!amount || typeof amount.value === "undefined" || !amount.unit) return 0;
   const value = parseFloat(amount.value);
@@ -16,13 +23,11 @@ const parseCurrency = (amount) => {
   if (amount.unit === "Crores") return value * 10000000;
   return value;
 };
-
 const formatCurrency = (amount) => {
   if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`;
   if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)} L`;
   return `₹${amount.toLocaleString()}`;
 };
-
 const getNextPlayer = async (io, tournamentId) => {
   const currentState = io.auctionState.get(tournamentId);
   if (!currentState || !currentState.currentPool) return null;
@@ -32,7 +37,9 @@ const getNextPlayer = async (io, tournamentId) => {
   }).populate({ path: "players", match: { status: "Available" } });
   return currentPool?.players[0] || null;
 };
+// --- End of Helper Functions ---
 
+// Admin starts the auction for a specific pool
 r.post("/start-pool", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -43,7 +50,6 @@ r.post("/start-pool", auth, async (req, res) => {
   if (!pool) return res.status(404).json({ error: "Pool not found" });
 
   const playersInPool = pool.players.filter((p) => p.status === "Available");
-
   if (playersInPool.length === 0) {
     pool.isCompleted = true;
     await pool.save();
@@ -89,7 +95,6 @@ r.post("/sell", auth, async (req, res) => {
 
     if (!tournament || !player)
       return res.status(404).json({ error: "Tournament or Player not found" });
-
     const team = tournament.teams.id(teamId);
     if (!team)
       return res
@@ -104,7 +109,6 @@ r.post("/sell", auth, async (req, res) => {
     player.soldTo = team._id;
     player.status = "Sold";
     await player.save();
-
     team.purseRemaining -= priceAmount;
     team.players.push(player._id);
     await tournament.save();
@@ -114,23 +118,22 @@ r.post("/sell", auth, async (req, res) => {
     );
     io.to(tournamentId).emit("squad_update", updatedTournament.teams);
 
-    // --- THIS IS THE CORRECTED LOGIC ---
     const currentState = io.auctionState.get(tournamentId);
-    const currentPool = await Pool.findOne({
-      tournament: tournamentId,
-      name: currentState.currentPool,
-    }).populate("players");
-    const upcomingPlayers = currentPool.players.filter(
-      (p) => p.status === "Available"
-    );
-
-    const nextPlayer = upcomingPlayers.shift(); // The actual next player
-
+    const nextPlayer = await getNextPlayer(io, tournamentId);
     let logMessage = `${player.name} sold to ${team.name} for ${formatCurrency(
       priceAmount
     )}.`;
+
     if (!nextPlayer) {
       logMessage += ` Pool "${currentState.currentPool}" is finished.`;
+      const currentPoolDoc = await Pool.findOne({
+        tournament: tournamentId,
+        name: currentState.currentPool,
+      });
+      if (currentPoolDoc) {
+        currentPoolDoc.isCompleted = true;
+        await currentPoolDoc.save();
+      }
     } else {
       logMessage += ` Next up: ${nextPlayer.name}`;
     }
@@ -138,7 +141,6 @@ r.post("/sell", auth, async (req, res) => {
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
       currentBid: nextPlayer ? nextPlayer.basePrice : 0,
-      upcomingPlayers: upcomingPlayers.slice(0, 5), // Send the new, correct upcoming list
       log: [...(currentState.log || []), logMessage],
     });
 
@@ -149,6 +151,8 @@ r.post("/sell", auth, async (req, res) => {
   }
 });
 
+// --- THIS IS THE CORRECTED AND COMPLETED ROUTE ---
+// Admin marks a player as unsold
 r.post("/unsold", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -161,13 +165,21 @@ r.post("/unsold", auth, async (req, res) => {
     player.status = "Unsold";
     await player.save();
 
+    // This logic is now complete and matches the '/sell' route
     const currentState = io.auctionState.get(tournamentId);
     const nextPlayer = await getNextPlayer(io, tournamentId);
 
     let logMessage = `${player.name} is unsold.`;
-
     if (!nextPlayer) {
       logMessage += ` Pool "${currentState.currentPool}" is finished.`;
+      const currentPoolDoc = await Pool.findOne({
+        tournament: tournamentId,
+        name: currentState.currentPool,
+      });
+      if (currentPoolDoc) {
+        currentPoolDoc.isCompleted = true;
+        await currentPoolDoc.save();
+      }
     } else {
       logMessage += ` Next up: ${nextPlayer.name}`;
     }
