@@ -53,7 +53,7 @@ export default function TeamDashboard() {
   const [allTeams, setAllTeams] = useState([]);
   const [auctionState, setAuctionState] = useState(null);
   const [pools, setPools] = useState([]);
-  const [activeTab, setActiveTab] = useState(null);
+  const [activeTab, setActiveTab] = useState("auction_room");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -70,11 +70,8 @@ export default function TeamDashboard() {
 
     const fetchData = async () => {
       try {
-        // --- THIS IS THE CORRECTED API CALL ---
-        const myTeamData = await api.auth.me();
+        const myTeamData = await api.teams.me();
         setMyTeam(myTeamData);
-        setActiveTab(myTeamData._id);
-
         const tournamentId = myTeamData.tournament;
         if (!tournamentId)
           throw new Error("Tournament ID not found for this team.");
@@ -85,10 +82,9 @@ export default function TeamDashboard() {
         ]);
         setAllTeams(allTeamsData);
         setPools(poolsData);
-
+        setActiveTab(myTeamData._id);
         socket.emit("join_tournament", tournamentId);
       } catch (e) {
-        console.error("Error fetching dashboard data:", e);
         setError(e.message);
       } finally {
         setIsLoading(false);
@@ -99,7 +95,6 @@ export default function TeamDashboard() {
 
     socket.on("connect", () => console.log("Connected to socket server!"));
     socket.on("auction_state_update", (state) => setAuctionState(state));
-
     socket.on("squad_update", (updatedTeams) => {
       setAllTeams(updatedTeams);
       setMyTeam((currentMyTeam) => {
@@ -108,6 +103,12 @@ export default function TeamDashboard() {
         );
         return myUpdatedTeam || currentMyTeam;
       });
+    });
+
+    // --- THIS IS THE NEW, CRITICAL LISTENER ---
+    // When the server tells us the pool list has changed, update our local state.
+    socket.on("pools_update", (updatedPools) => {
+      setPools(updatedPools);
     });
 
     return () => socket.disconnect();
