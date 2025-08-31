@@ -33,29 +33,29 @@ r.put("/:poolId", auth, async (req, res) => {
   }
 });
 
-// --- THIS IS THE UPDATED CREATE ROUTE ---
-r.post("/", auth, async (req, res) => {
+r.delete("/:poolId", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
   const io = req.app.get("io");
   try {
-    const { name, tournament, order } = req.body;
-    const newPool = await Pool.create({ name, tournament, order, players: [] });
+    const pool = await Pool.findById(req.params.poolId);
+    if (!pool) return res.status(404).json({ error: "Pool not found" });
+    const tournamentId = pool.tournament;
 
-    // After creating, fetch the new full list of pools
-    const allPools = await Pool.find({ tournament })
+    await Pool.findByIdAndDelete(req.params.poolId);
+
+    // --- NEW: BROADCAST THE UPDATE ---
+    // After deleting, fetch the new full list of pools for the tournament.
+    const allPools = await Pool.find({ tournament: tournamentId })
       .populate("players")
       .sort({ order: 1 });
-    // Broadcast the update to all clients in the tournament room
-    io.to(tournament).emit("pools_update", allPools);
+    // Broadcast the update to all clients in the tournament room.
+    io.to(tournamentId.toString()).emit("pools_update", allPools);
 
-    res.status(201).json(newPool);
+    res.status(204).send();
   } catch (e) {
-    if (e.code === 11000)
-      return res
-        .status(409)
-        .json({ error: "A pool with this name already exists." });
-    res.status(500).json({ error: "Server error creating pool" });
+    console.error("Error deleting pool:", e);
+    res.status(500).json({ error: "Server error deleting pool" });
   }
 });
 
