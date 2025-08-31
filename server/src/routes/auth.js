@@ -129,13 +129,9 @@ r.get(
     const token = jwt.sign({ id: user._id, role: "admin" }, JWT_SECRET, {
       expiresIn: "12h",
     });
-
+    console.log(process.env.CLIENT_URL);
     // Redirect the user back to the frontend with the token
-    res.redirect(
-      `${
-        process.env.CLIENT_URL || "http://localhost:3000"
-      }/auth/callback?token=${token}`
-    );
+    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
   }
 );
 

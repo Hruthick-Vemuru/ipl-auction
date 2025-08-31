@@ -1,10 +1,3 @@
-/********************************************************************************
- * --- FILE: server/config.js (CORRECTED) ---
- ********************************************************************************/
-// This is the complete and final version of your config file.
-// It has been updated to correctly export the SERVER_URL variable, which will
-// permanently fix the server crash.
-
 import dotenv from "dotenv";
 dotenv.config();
 
