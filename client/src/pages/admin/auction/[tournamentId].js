@@ -534,6 +534,9 @@ export default function AuctionControlPanel() {
       setTeams(updatedTeams)
     );
 
+    socketRef.current.on("auction_notification", (data) => {
+      setNotification(data);
+    });
     return () => socketRef.current.disconnect();
   }, [tournamentId, router]);
 

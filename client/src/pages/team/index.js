@@ -12,6 +12,28 @@ import { api, getToken } from "../../lib/api";
 import { io } from "socket.io-client";
 import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
 
+const Notification = memo(function Notification({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [onClose, message, type]);
+  const baseClasses =
+    "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 transition-opacity duration-300";
+  const typeClasses = type === "success" ? "bg-green-600" : "bg-red-600";
+  return (
+    <div className={`${baseClasses} ${typeClasses}`}>
+      {message}
+      <button
+        onClick={onClose}
+        className="ml-4 font-bold opacity-70 hover:opacity-100"
+      >
+        X
+      </button>
+    </div>
+  );
+});
 // --- "Who Wants to Be a Millionaire?" Style Hexagonal PlayerCard ---
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
   return (
@@ -63,6 +85,7 @@ export default function TeamDashboard() {
   const [activeTab, setActiveTab] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notification, setNotification] = useState(null);
 
   useEffect(() => {
     const token = getToken();
@@ -117,6 +140,14 @@ export default function TeamDashboard() {
           (t) => t._id === currentMyTeam._id
         );
         return myUpdatedTeam || currentMyTeam;
+      });
+      socket.on("pools_update", (updatedPools) => {
+        setPools(updatedPools);
+      });
+
+      // --- THIS IS THE NEW, CRITICAL LISTENER ---
+      socket.on("auction_notification", (data) => {
+        setNotification(data);
       });
     });
 
@@ -322,6 +353,14 @@ export default function TeamDashboard() {
           backgroundAttachment: "fixed",
         }}
       >
+        {" "}
+        {notification && (
+          <Notification
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification(null)}
+          />
+        )}
         <div className="max-w-7xl mx-auto">
           <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
             <div>

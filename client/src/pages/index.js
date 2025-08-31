@@ -1,8 +1,9 @@
 /********************************************************************************
  * --- FILE: client/src/pages/index.js (FINAL REDESIGN) ---
  ********************************************************************************/
-// FINAL VERSION: The homepage has been updated with the new, official
-// application name: "Hruthick's Auction Table".
+// FINAL VERSION: This homepage has been completely redesigned with a professional
+// background image, a strong title, an engaging tagline, and a polished
+// "glassmorphism" UI to create an impactful first impression.
 
 import Link from "next/link";
 
@@ -32,13 +33,13 @@ export default function ChooseRole() {
             href="/admin/login"
             className="w-full text-center py-3 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-lg font-semibold transition-transform transform hover:scale-105"
           >
-            I&apos;m an Auction Admin
+            I'm an Auction Admin
           </Link>
           <Link
             href="/team/login"
             className="w-full text-center py-3 px-4 bg-teal-500 hover:bg-teal-600 rounded-lg text-lg font-semibold transition-transform transform hover:scale-105"
           >
-            I&apos;m a Team Owner
+            I'm a Team Owner
           </Link>
         </div>
       </div>
