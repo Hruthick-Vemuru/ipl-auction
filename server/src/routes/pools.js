@@ -4,7 +4,7 @@ import Pool from "../models/Pool.js";
 
 const r = Router();
 
-// Get all pools for a specific tournament, populated with full player details
+// Get all pools for a specific tournament
 r.get("/tournament/:tournamentId", auth, async (req, res) => {
   try {
     const pools = await Pool.find({ tournament: req.params.tournamentId })
@@ -16,23 +16,24 @@ r.get("/tournament/:tournamentId", auth, async (req, res) => {
   }
 });
 
-// Admin creates a new pool
-r.post("/", auth, async (req, res) => {
+// Admin updates a pool
+r.put("/:poolId", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
   try {
-    const { name, tournament, order } = req.body;
-    const newPool = await Pool.create({ name, tournament, order, players: [] });
-    res.status(201).json(newPool);
+    const { name, order, players } = req.body;
+    const updatedPool = await Pool.findByIdAndUpdate(
+      req.params.poolId,
+      { name, order, players },
+      { new: true }
+    );
+    res.json(updatedPool);
   } catch (e) {
-    if (e.code === 11000)
-      return res
-        .status(409)
-        .json({ error: "A pool with this name already exists." });
-    res.status(500).json({ error: "Server error creating pool" });
+    res.status(500).json({ error: "Server error updating pool" });
   }
 });
 
+// --- THIS IS THE UPDATED CREATE ROUTE ---
 r.post("/", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });

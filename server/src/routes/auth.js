@@ -6,6 +6,8 @@ import Tournament from "../models/Tournament.js";
 import { JWT_SECRET } from "../../config.js";
 import { auth } from "../middleware/auth.js";
 import Submission from "../models/Submission.js";
+import passport from "passport";
+import "../passport-setup.js"; // Ensure passport strategies are set up
 
 const r = Router();
 
@@ -111,5 +113,30 @@ r.get("/me/team", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+r.get("/google", passport.authenticate("google"));
+
+// This is the route Google redirects to after a successful login
+r.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: "/login/failed",
+  }),
+  (req, res) => {
+    // If login is successful, the user object is attached to req.user by Passport
+    const user = req.user;
+    const token = jwt.sign({ id: user._id, role: "admin" }, JWT_SECRET, {
+      expiresIn: "12h",
+    });
+
+    // Redirect the user back to the frontend with the token
+    res.redirect(
+      `${
+        process.env.CLIENT_URL || "http://localhost:3000"
+      }/auth/callback?token=${token}`
+    );
+  }
+);
 
 export default r;

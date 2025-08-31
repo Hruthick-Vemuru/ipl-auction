@@ -1,10 +1,5 @@
-// REWORKED: This is now the central model. It includes an embedded schema for Teams,
-// meaning every tournament document will contain its own array of teams.
-
 import mongoose from "mongoose";
 
-// This is a SUB-DOCUMENT schema. It defines the structure of a team
-// that will be embedded within a tournament.
 const teamSchema = new mongoose.Schema({
   name: { type: String, required: true },
   username: { type: String, required: true },

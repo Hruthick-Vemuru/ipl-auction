@@ -1,10 +1,3 @@
-/********************************************************************************
- * --- FILE: server/src/routes/auction.js (FINAL CORRECTED) ---
- ********************************************************************************/
-// FINAL VERSION: The logic for the '/unsold' route has been completed.
-// It now correctly finds the next player and updates the auction state for all
-// users, ensuring the auction continues smoothly after a player is unsold.
-
 import { Router } from "express";
 import Tournament from "../models/Tournament.js";
 import Player from "../models/Player.js";

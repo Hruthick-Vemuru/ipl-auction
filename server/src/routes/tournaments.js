@@ -1,10 +1,3 @@
-/********************************************************************************
- * --- STEP 4: REPLACE THIS FILE ---
- * FILE: server/src/routes/tournaments.js (REWORKED)
- ********************************************************************************/
-// REWORKED: This route file now handles ALL team management operations (create, get, delete)
-// by modifying the teams array within a Tournament document.
-
 import { Router } from "express";
 import { auth } from "../middleware/auth.js";
 import Tournament from "../models/Tournament.js";
@@ -64,11 +57,9 @@ r.post("/:tournamentId/teams", auth, async (req, res) => {
 
     // Check for duplicate username WITHIN this tournament's teams array
     if (tournament.teams.some((team) => team.username === username)) {
-      return res
-        .status(409)
-        .json({
-          error: "A team with this username already exists in this tournament.",
-        });
+      return res.status(409).json({
+        error: "A team with this username already exists in this tournament.",
+      });
     }
 
     const purseAmount = parseCurrency(purse);
@@ -217,11 +208,9 @@ r.delete("/:tournamentId", auth, async (req, res) => {
     res.status(204).send();
   } catch (e) {
     console.error("Error deleting tournament:", e);
-    res
-      .status(500)
-      .json({
-        error: "An unexpected error occurred while deleting the tournament.",
-      });
+    res.status(500).json({
+      error: "An unexpected error occurred while deleting the tournament.",
+    });
   }
 });
 

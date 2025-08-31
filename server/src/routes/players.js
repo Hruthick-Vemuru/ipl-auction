@@ -1,8 +1,3 @@
-/********************************************************************************
- * --- FILE: server/src/routes/players.js (FINAL VERSION) ---
- ********************************************************************************/
-// UPDATED: The create player route now correctly parses the new basePrice format.
-
 import { Router } from "express";
 import Player from "../models/Player.js";
 import Pool from "../models/Pool.js"; // Import Pool to check for unassigned players
