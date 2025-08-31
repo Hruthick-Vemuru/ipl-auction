@@ -1,10 +1,3 @@
-/********************************************************************************
- * --- FILE: client/src/pages/admin/index.js (AdminDashboard - FINAL) ---
- ********************************************************************************/
-// FINAL VERSION: This version restores the correct, fully custom theme creator
-// with an accurate live gradient preview. It also correctly integrates the new
-// "View Submissions" button for each tournament.
-
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";

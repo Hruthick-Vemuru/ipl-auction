@@ -1,11 +1,3 @@
-/********************************************************************************
- * --- FILE: client/src/pages/admin/auction/[tournamentId].js (DEFINITIVE FIX) ---
- ********************************************************************************/
-// This is the complete and final version of the Auction Control Panel.
-// The PoolManager logic has been completely rewritten with a simpler, more robust
-// data-fetching strategy to permanently fix all visual glitches, lag, and
-// desynchronization issues when moving players.
-
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";

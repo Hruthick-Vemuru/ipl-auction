@@ -1,10 +1,3 @@
-/********************************************************************************
- * --- FILE: client/src/pages/index.js (FINAL REDESIGN) ---
- ********************************************************************************/
-// FINAL VERSION: This homepage has been completely redesigned with a professional
-// background image, a strong title, an engaging tagline, and a polished
-// "glassmorphism" UI to create an impactful first impression.
-
 import Link from "next/link";
 
 export default function ChooseRole() {

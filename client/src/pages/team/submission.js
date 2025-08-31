@@ -1,17 +1,45 @@
-/********************************************************************************
- * --- FILE: client/src/pages/team/submission.js (FINAL) ---
- ********************************************************************************/
-// This is the complete and final version of the Team Submission Page.
-// It is fully styled with the "glassmorphism" theme and uses the correct
-// API calls to fetch data and submit the final squad.
-
 import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken } from "../../lib/api";
 import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
 
-// --- Reusable Notification Component ---
+// --- NEW: Validation Logic (replicated from backend's validate.js) ---
+const countRoles = (players) => {
+  return players.reduce((acc, p) => {
+    acc[p.role] = (acc[p.role] || 0) + 1;
+    return acc;
+  }, {});
+};
+
+const validateSquad = (players) => {
+  const roles = countRoles(players);
+  const overseas = players.filter((p) => p.nationality === "Overseas").length;
+  if (players.length !== 15) return "Squad must be exactly 15 players";
+  if (overseas > 6) return "Max 6 overseas players allowed in Squad of 15";
+  if ((roles.Bowler || 0) < 3) return "At least 3 bowlers required in Squad";
+  if ((roles.Wicketkeeper || 0) < 1)
+    return "At least 1 wicketkeeper required in Squad";
+  return null;
+};
+
+const validatePlayingXI = (players) => {
+  const roles = countRoles(players);
+  const overseas = players.filter((p) => p.nationality === "Overseas").length;
+  const wk = roles.Wicketkeeper || 0;
+  const bowlerAllrounders = players.filter(
+    (p) => p.role === "Bowler" || p.role === "Allrounder"
+  ).length;
+  if (players.length !== 11) return "Playing XI must be exactly 11 players";
+  if (overseas > 4) return "Max 4 overseas players allowed in Playing XI";
+  if (wk < 1) return "At least 1 wicketkeeper required in Playing XI";
+  if (bowlerAllrounders < 5)
+    return "At least 5 bowlers or allrounders required in Playing XI";
+  return null;
+};
+// --- End of Validation Logic ---
+
+// --- Reusable Components (Notification, PlayerCard) ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -35,7 +63,6 @@ const Notification = memo(function Notification({ message, type, onClose }) {
   );
 });
 
-// --- Reusable PlayerCard component ---
 const PlayerCard = memo(function PlayerCard({
   player,
   accentColor,
@@ -137,7 +164,6 @@ export default function TeamSubmissionPage() {
           setMyTeam(teamData);
           if (teamData.submission) {
             setSubmission(teamData.submission);
-            // Pre-populate the lists if a submission already exists
             setSquad(teamData.submission.squad || []);
             setPlayingXI(teamData.submission.playingXI || []);
             setCaptain(teamData.submission.captain || null);
@@ -229,6 +255,33 @@ export default function TeamSubmissionPage() {
   );
 
   const handleSubmit = useCallback(async () => {
+    const squadError = validateSquad(squad);
+    if (squadError) {
+      return setNotification({
+        message: `Squad Invalid: ${squadError}`,
+        type: "error",
+      });
+    }
+    const xiError = validatePlayingXI(playingXI);
+    if (xiError) {
+      return setNotification({
+        message: `Playing XI Invalid: ${xiError}`,
+        type: "error",
+      });
+    }
+    if (!captain) {
+      return setNotification({
+        message: "You must select a Captain for your Playing XI.",
+        type: "error",
+      });
+    }
+    if (!viceCaptain) {
+      return setNotification({
+        message: "You must select a Vice-Captain for your Playing XI.",
+        type: "error",
+      });
+    }
+
     try {
       const payload = {
         squadIds: squad.map((p) => p._id),
@@ -290,7 +343,6 @@ export default function TeamSubmissionPage() {
                 </div>
               </div>
             )}
-
             <button
               onClick={handleSubmit}
               disabled={submission?.locked}
@@ -310,7 +362,6 @@ export default function TeamSubmissionPage() {
             </Link>
           </div>
         </header>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-8">
             <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">

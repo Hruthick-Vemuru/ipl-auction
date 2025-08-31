@@ -1,39 +1,10 @@
-/********************************************************************************
- * --- FILE: client/src/pages/team/index.js (DEFINITIVE FIX) ---
- ********************************************************************************/
-// This is the complete and final version of the Team Dashboard.
-// The data fetching and rendering logic has been completely rewritten to be
-// robust and permanently eliminate the "Cannot read properties of null" error.
-
-import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken } from "../../lib/api";
 import { io } from "socket.io-client";
 import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
 
-const Notification = memo(function Notification({ message, type, onClose }) {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [onClose, message, type]);
-  const baseClasses =
-    "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 transition-opacity duration-300";
-  const typeClasses = type === "success" ? "bg-green-600" : "bg-red-600";
-  return (
-    <div className={`${baseClasses} ${typeClasses}`}>
-      {message}
-      <button
-        onClick={onClose}
-        className="ml-4 font-bold opacity-70 hover:opacity-100"
-      >
-        X
-      </button>
-    </div>
-  );
-});
 // --- "Who Wants to Be a Millionaire?" Style Hexagonal PlayerCard ---
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
   return (
@@ -141,14 +112,14 @@ export default function TeamDashboard() {
         );
         return myUpdatedTeam || currentMyTeam;
       });
-      socket.on("pools_update", (updatedPools) => {
-        setPools(updatedPools);
-      });
+    });
 
-      // --- THIS IS THE NEW, CRITICAL LISTENER ---
-      socket.on("auction_notification", (data) => {
-        setNotification(data);
-      });
+    socket.on("pools_update", (updatedPools) => {
+      setPools(updatedPools);
+    });
+
+    socket.on("auction_notification", (data) => {
+      setNotification(data);
     });
 
     return () => socket.disconnect();
@@ -323,7 +294,6 @@ export default function TeamDashboard() {
     );
   };
 
-  // --- THIS IS THE NEW, ROBUST RENDER LOGIC ---
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -342,88 +312,85 @@ export default function TeamDashboard() {
     );
   }
 
-  // Only render the dashboard if we have successfully loaded the team data
-  if (myTeam) {
+  if (!myTeam) {
     return (
-      <div
-        className="min-h-screen p-4 md:p-8 text-white transition-all duration-500"
-        style={{
-          backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${activeViewData.theme.primary}, ${activeViewData.theme.accent})`,
-          backgroundSize: "cover",
-          backgroundAttachment: "fixed",
-        }}
-      >
-        {" "}
-        {notification && (
-          <Notification
-            message={notification.message}
-            type={notification.type}
-            onClose={() => setNotification(null)}
-          />
-        )}
-        <div className="max-w-7xl mx-auto">
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <div>
-              <h1
-                className="text-5xl font-bold"
-                style={{ color: activeViewData.header.accent }}
-              >
-                {activeViewData.header.name}
-              </h1>
-              <p className="text-white text-opacity-80 text-lg">
-                Purse Remaining: {formatCurrency(activeViewData.header.purse)}
-              </p>
-            </div>
-            {activeViewData.isMyTeamView && (
-              <Link
-                href="/team/submission"
-                className="mt-4 md:mt-0 px-6 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
-                style={{
-                  borderColor: activeViewData.header.accent,
-                  color: activeViewData.header.accent,
-                }}
-              >
-                Go to Squad Submission
-              </Link>
-            )}
-          </header>
-
-          <div className="flex border-b border-gray-700 mb-6 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab("auction_room")}
-              className={`px-4 py-2 font-semibold flex-shrink-0 transition-colors ${
-                activeTab === "auction_room"
-                  ? "border-b-2 text-yellow-400 border-yellow-400"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Auction Room
-            </button>
-            {allTeams.map((t) => (
-              <button
-                key={t._id}
-                onClick={() => setActiveTab(t._id)}
-                className={`px-4 py-2 font-semibold flex-shrink-0 transition-colors ${
-                  activeTab === t._id
-                    ? "border-b-2 text-white border-white"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                {t._id === myTeam?._id ? "My Squad" : t.name}
-              </button>
-            ))}
-          </div>
-
-          <div>{renderContent()}</div>
-        </div>
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        Initializing...
       </div>
     );
   }
 
-  // Fallback case, should not be reached
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-      An unknown error occurred.
+    <div
+      className="min-h-screen p-4 md:p-8 text-white transition-all duration-500"
+      style={{
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${activeViewData.theme.primary}, ${activeViewData.theme.accent})`,
+        backgroundSize: "cover",
+        backgroundAttachment: "fixed",
+      }}
+    >
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      <div className="max-w-7xl mx-auto">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <div>
+            <h1
+              className="text-5xl font-bold"
+              style={{ color: activeViewData.header.accent }}
+            >
+              {activeViewData.header.name}
+            </h1>
+            <p className="text-white text-opacity-80 text-lg">
+              Purse Remaining: {formatCurrency(activeViewData.header.purse)}
+            </p>
+          </div>
+          {activeViewData.isMyTeamView && (
+            <Link
+              href="/team/submission"
+              className="mt-4 md:mt-0 px-6 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
+              style={{
+                borderColor: myTeam.colorAccent,
+                color: myTeam.colorAccent,
+              }}
+            >
+              Go to Squad Submission
+            </Link>
+          )}
+        </header>
+
+        <div className="flex border-b border-gray-700 mb-6 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab("auction_room")}
+            className={`px-4 py-2 font-semibold flex-shrink-0 transition-colors ${
+              activeTab === "auction_room"
+                ? "border-b-2 text-yellow-400 border-yellow-400"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Auction Room
+          </button>
+          {allTeams.map((t) => (
+            <button
+              key={t._id}
+              onClick={() => setActiveTab(t._id)}
+              className={`px-4 py-2 font-semibold flex-shrink-0 transition-colors ${
+                activeTab === t._id
+                  ? "border-b-2 text-white border-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {t._id === myTeam?._id ? "My Squad" : t.name}
+            </button>
+          ))}
+        </div>
+
+        <div>{renderContent()}</div>
+      </div>
     </div>
   );
 }
