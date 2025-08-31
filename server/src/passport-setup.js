@@ -1,14 +1,19 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import User from "./models/User.js";
-import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from "../config.js";
+import {
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  SERVER_URL,
+} from "../config.js";
 
 passport.use(
   new GoogleStrategy(
     {
       clientID: GOOGLE_CLIENT_ID,
       clientSecret: GOOGLE_CLIENT_SECRET,
-      callbackURL: "/api/auth/google/callback",
+      // --- THIS IS THE CORRECTED, ABSOLUTE URL ---
+      callbackURL: `${SERVER_URL}/api/auth/google/callback`,
       scope: ["profile", "email"],
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -21,7 +26,7 @@ passport.use(
             googleId: profile.id,
             name: profile.displayName,
             email: profile.emails[0].value,
-            isVerified: true, // Users signing in with Google are automatically verified
+            isVerified: true,
           });
           return done(null, user);
         }
