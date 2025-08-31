@@ -96,10 +96,7 @@ r.post("/sell", auth, async (req, res) => {
     if (!tournament || !player)
       return res.status(404).json({ error: "Tournament or Player not found" });
     const team = tournament.teams.id(teamId);
-    if (!team)
-      return res
-        .status(404)
-        .json({ error: "Team not found in this tournament" });
+    if (!team) return res.status(404).json({ error: "Team not found" });
 
     const priceAmount = parseCurrency(price);
     if (priceAmount > team.purseRemaining)
@@ -113,6 +110,15 @@ r.post("/sell", auth, async (req, res) => {
     team.players.push(player._id);
     await tournament.save();
 
+    // --- THIS IS THE NEW, CRITICAL PART ---
+    const notificationMessage = `${player.name} sold to ${
+      team.name
+    } for ${formatCurrency(priceAmount)}.`;
+    io.to(tournamentId).emit("auction_notification", {
+      message: notificationMessage,
+      type: "success",
+    });
+
     const updatedTournament = await Tournament.findById(tournamentId).populate(
       "teams.players"
     );
@@ -120,23 +126,9 @@ r.post("/sell", auth, async (req, res) => {
 
     const currentState = io.auctionState.get(tournamentId);
     const nextPlayer = await getNextPlayer(io, tournamentId);
-    let logMessage = `${player.name} sold to ${team.name} for ${formatCurrency(
-      priceAmount
-    )}.`;
-
-    if (!nextPlayer) {
-      logMessage += ` Pool "${currentState.currentPool}" is finished.`;
-      const currentPoolDoc = await Pool.findOne({
-        tournament: tournamentId,
-        name: currentState.currentPool,
-      });
-      if (currentPoolDoc) {
-        currentPoolDoc.isCompleted = true;
-        await currentPoolDoc.save();
-      }
-    } else {
-      logMessage += ` Next up: ${nextPlayer.name}`;
-    }
+    let logMessage = `${notificationMessage} Next up: ${
+      nextPlayer ? nextPlayer.name : "Pool Finished"
+    }.`;
 
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
@@ -151,7 +143,6 @@ r.post("/sell", auth, async (req, res) => {
   }
 });
 
-// --- THIS IS THE CORRECTED AND COMPLETED ROUTE ---
 // Admin marks a player as unsold
 r.post("/unsold", auth, async (req, res) => {
   if (req.user.role !== "admin")
@@ -165,24 +156,18 @@ r.post("/unsold", auth, async (req, res) => {
     player.status = "Unsold";
     await player.save();
 
-    // This logic is now complete and matches the '/sell' route
+    // --- THIS IS THE NEW, CRITICAL PART ---
+    const notificationMessage = `${player.name} is unsold.`;
+    io.to(tournamentId).emit("auction_notification", {
+      message: notificationMessage,
+      type: "error",
+    });
+
     const currentState = io.auctionState.get(tournamentId);
     const nextPlayer = await getNextPlayer(io, tournamentId);
-
-    let logMessage = `${player.name} is unsold.`;
-    if (!nextPlayer) {
-      logMessage += ` Pool "${currentState.currentPool}" is finished.`;
-      const currentPoolDoc = await Pool.findOne({
-        tournament: tournamentId,
-        name: currentState.currentPool,
-      });
-      if (currentPoolDoc) {
-        currentPoolDoc.isCompleted = true;
-        await currentPoolDoc.save();
-      }
-    } else {
-      logMessage += ` Next up: ${nextPlayer.name}`;
-    }
+    let logMessage = `${notificationMessage} Next up: ${
+      nextPlayer ? nextPlayer.name : "Pool Finished"
+    }.`;
 
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
