@@ -116,6 +116,20 @@ r.get("/me/team", auth, async (req, res) => {
 
 r.get("/google", passport.authenticate("google"));
 
+r.get("/me/admin", auth, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
+  try {
+    // Find the user by the ID stored in their token, but exclude the password hash
+    const user = await User.findById(req.user.id).select("-passwordHash");
+    if (!user) return res.status(404).json({ error: "Admin user not found" });
+    res.json(user);
+  } catch (e) {
+    console.error("Error fetching admin 'me':", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // This is the route Google redirects to after a successful login
 r.get(
   "/google/callback",

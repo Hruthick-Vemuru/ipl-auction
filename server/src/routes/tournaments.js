@@ -214,4 +214,102 @@ r.delete("/:tournamentId", auth, async (req, res) => {
   }
 });
 
+// Get all pools for a specific tournament
+r.get("/:tournamentId/pools", auth, async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(
+      req.params.tournamentId
+    ).populate("pools.players");
+    if (!tournament)
+      return res.status(404).json({ error: "Tournament not found" });
+    res.json(tournament.pools.sort((a, b) => a.order - b.order));
+  } catch (e) {
+    res.status(500).json({ error: "Server error fetching pools" });
+  }
+});
+
+// Admin creates a new pool in a tournament and broadcasts the change
+r.post("/:tournamentId/pools", auth, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
+  const io = req.app.get("io");
+  try {
+    const { tournamentId } = req.params;
+    const { name, order } = req.body;
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament)
+      return res.status(404).json({ error: "Tournament not found" });
+    if (tournament.pools.some((p) => p.name === name)) {
+      return res.status(409).json({
+        error: "A pool with this name already exists in this tournament.",
+      });
+    }
+    const newPool = { name, order, players: [] };
+    tournament.pools.push(newPool);
+    await tournament.save();
+
+    const updatedTournament = await Tournament.findById(tournamentId).populate(
+      "pools.players"
+    );
+    io.to(tournamentId).emit("pools_update", updatedTournament.pools);
+
+    res.status(201).json(tournament.pools[tournament.pools.length - 1]);
+  } catch (e) {
+    res.status(500).json({ error: "Server error creating pool" });
+  }
+});
+
+// Admin updates a pool's players
+r.put("/:tournamentId/pools/:poolId", auth, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
+  try {
+    const { tournamentId, poolId } = req.params;
+    const { players } = req.body;
+
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament)
+      return res.status(404).json({ error: "Tournament not found" });
+
+    const pool = tournament.pools.id(poolId);
+    if (!pool) return res.status(404).json({ error: "Pool not found" });
+
+    pool.players = players;
+    await tournament.save();
+    res.json(pool);
+  } catch (e) {
+    res.status(500).json({ error: "Server error updating pool" });
+  }
+});
+
+// --- THIS IS THE REWRITTEN AND CORRECTED DELETE ROUTE ---
+r.delete("/:tournamentId/pools/:poolId", auth, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
+  const io = req.app.get("io");
+  try {
+    const { tournamentId, poolId } = req.params;
+
+    // Use a single, atomic operation to find the tournament and remove the pool.
+    // The $pull operator is the safest way to remove an item from an array.
+    const updatedTournament = await Tournament.findByIdAndUpdate(
+      tournamentId,
+      { $pull: { pools: { _id: poolId } } },
+      { new: true } // This option returns the document *after* the update
+    ).populate("pools.players");
+
+    if (!updatedTournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Broadcast the update to all clients
+    io.to(tournamentId).emit("pools_update", updatedTournament.pools);
+
+    res.status(204).send();
+  } catch (e) {
+    console.error("Error deleting pool:", e);
+    res.status(500).json({ error: "Server error deleting pool" });
+  }
+});
+
 export default r;

@@ -1,12 +1,10 @@
 import { Router } from "express";
 import Player from "../models/Player.js";
-import Pool from "../models/Pool.js"; // Import Pool to check for unassigned players
+import Tournament from "../models/Tournament.js";
 import { auth } from "../middleware/auth.js";
-import { INITIAL_PURSE } from "../../config.js"; // Not used here, but good practice
 
-// --- NEW Helper to parse the new currency format ---
 const parseCurrency = (amount) => {
-  if (!amount || !amount.value || !amount.unit) return 0; // Default to 0 if format is wrong
+  if (!amount || typeof amount.value === "undefined" || !amount.unit) return 0;
   const value = parseFloat(amount.value);
   if (isNaN(value)) return 0;
   if (amount.unit === "Lakhs") return value * 100000;
@@ -16,45 +14,51 @@ const parseCurrency = (amount) => {
 
 const r = Router();
 
-// Get all players (can filter by status)
-r.get("/", async (req, res) => {
-  const { status } = req.query;
-  const q = {};
-  if (status) q.status = status;
-  const players = await Player.find(q).sort({ name: 1 });
-  res.json(players);
-});
-
-// --- NEW: Get all players NOT assigned to any pool in a specific tournament ---
+// Get unassigned players (now ONLY returns unassigned players owned by the logged-in admin)
 r.get("/unassigned/:tournamentId", auth, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
   try {
-    // 1. Find all players assigned to pools in this tournament
-    const pools = await Pool.find({ tournament: req.params.tournamentId });
-    const assignedPlayerIds = pools.flatMap((p) => p.players);
+    const tournament = await Tournament.findById(req.params.tournamentId);
+    if (!tournament)
+      return res.status(404).json({ error: "Tournament not found" });
 
-    // 2. Find all players whose ID is NOT in the assigned list
-    const unassigned = await Player.find({ _id: { $nin: assignedPlayerIds } });
+    // Ensure the admin owns this tournament before proceeding
+    if (String(tournament.admin) !== String(req.user.id)) {
+      return res.status(403).json({ error: "You do not own this tournament." });
+    }
+
+    const assignedPlayerIds = tournament.pools.flatMap((p) => p.players);
+
+    // --- THIS IS THE KEY SECURITY FIX ---
+    // Find all players where the admin ID matches the logged-in user,
+    // AND the player's ID is not in the assigned list.
+    const unassigned = await Player.find({
+      admin: req.user.id,
+      _id: { $nin: assignedPlayerIds },
+    }).sort({ name: 1 });
+
     res.json(unassigned);
   } catch (e) {
+    console.error("Error fetching unassigned players:", e);
     res.status(500).json({ error: "Server error fetching unassigned players" });
   }
 });
 
-// Create a new player
+// Create a new player (now correctly saves the admin's ID)
 r.post("/", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
   try {
     const playerData = req.body;
-
-    // --- UPDATED: Parse the basePrice object into a number ---
     const basePriceAmount = parseCurrency(playerData.basePrice);
 
     const newPlayer = await Player.create({
       name: playerData.name,
       role: playerData.role,
       nationality: playerData.nationality,
-      basePrice: basePriceAmount, // Use the calculated number
+      admin: req.user.id, // Save the owner's ID
+      basePrice: basePriceAmount,
       status: "Available",
     });
     res.status(201).json(newPlayer);
@@ -64,24 +68,33 @@ r.post("/", auth, async (req, res) => {
   }
 });
 
+// Delete a player (now correctly checks for ownership before deleting)
 r.delete("/:playerId", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
   try {
     const { playerId } = req.params;
 
-    // 1. Remove the player's ID from any pool they are in.
-    // The '$pull' operator removes all instances of a value from an array.
-    await Pool.updateMany(
-      { players: playerId },
-      { $pull: { players: playerId } }
+    // --- THIS IS THE KEY SECURITY FIX ---
+    // Find the player by its ID AND the logged-in admin's ID.
+    // This makes it impossible for one admin to delete another's player.
+    const player = await Player.findOne({ _id: playerId, admin: req.user.id });
+    if (!player) {
+      return res
+        .status(404)
+        .json({
+          error: "Player not found or you do not have permission to delete it.",
+        });
+    }
+
+    // Pull the player from any pools they might be in
+    await Tournament.updateMany(
+      { "pools.players": playerId },
+      { $pull: { "pools.$.players": playerId } }
     );
 
-    // 2. Delete the player document itself.
-    const result = await Player.findByIdAndDelete(playerId);
-    if (!result) return res.status(404).json({ error: "Player not found" });
-
-    res.status(204).send(); // Success, no content
+    await Player.findByIdAndDelete(playerId);
+    res.status(204).send();
   } catch (e) {
     console.error("Error deleting player:", e);
     res.status(500).json({ error: "Server error while deleting player" });

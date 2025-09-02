@@ -1,12 +1,11 @@
 import express from "express";
-import session from "express-session";
-import passport from "passport";
-// --- THIS IS THE CORRECTED IMPORT PATH ---
-import "./passport-setup.js";
-import { SESSION_SECRET, MONGO_URI, PORT, ALLOW_ORIGIN } from "../config.js";
 import mongoose from "mongoose";
 import cors from "cors";
 import morgan from "morgan";
+import session from "express-session";
+import passport from "passport";
+import "./passport-setup.js"; // Note: Corrected path from previous fixes
+import { PORT, MONGO_URI, ALLOW_ORIGIN, SESSION_SECRET } from "../config.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupSocket } from "./socket.js";
@@ -16,20 +15,21 @@ import tournamentRoutes from "./routes/tournaments.js";
 import playerRoutes from "./routes/players.js";
 import auctionRoutes from "./routes/auction.js";
 import submissionRoutes from "./routes/submissions.js";
-import poolRoutes from "./routes/pools.js";
+// The `teamRoutes` and `poolRoutes` are correctly removed from here in the embedded architecture
 
 const app = express();
 const httpServer = createServer(app);
 
-const productionOrigins = ALLOW_ORIGIN.split(",").map((origin) =>
-  origin.trim()
-);
+// --- CORS Configuration ---
+const allowedOrigins = ALLOW_ORIGIN.split(",").map((origin) => origin.trim());
+
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || productionOrigins.includes(origin)) {
+    // This logic allows requests from any URL in your ALLOW_ORIGIN list.
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
-      return callback(new Error("Not allowed by CORS"));
+      return callback(new Error(`The origin ${origin} is not allowed by CORS`));
     }
   },
   credentials: true,
@@ -43,6 +43,7 @@ app.set("io", io);
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(morgan("dev"));
+
 app.use(
   session({
     secret: SESSION_SECRET,
@@ -62,7 +63,6 @@ app.use("/api/tournaments", tournamentRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/api/auction", auctionRoutes);
 app.use("/api/submissions", submissionRoutes);
-app.use("/api/pools", poolRoutes);
 
 // --- Database and Server Start ---
 mongoose
