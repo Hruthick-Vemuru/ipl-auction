@@ -1,14 +1,14 @@
 /********************************************************************************
- * --- FILE: client/src/pages/team/index.js (FINAL) ---
+ * --- FILE: client/src/pages/team/index.js (FINAL - CORRECTED) ---
  ********************************************************************************/
-// FINAL VERSION: The data fetching and real-time update logic has been
-// completely rewritten to be robust, permanently fixing the "black screen"
-// crash and ensuring all parts of the UI stay perfectly in sync.
+// This is the complete and final version of the Team Dashboard.
+// The `handleLogout` function has been moved to the top level of the component
+// to fix the "Invalid hook call" error.
 
 import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken } from "../../lib/api";
+import { api, getToken, setToken } from "../../lib/api";
 import { io } from "socket.io-client";
 import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
 
@@ -89,6 +89,12 @@ export default function TeamDashboard() {
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
 
+  // --- THIS IS THE CORRECT LOCATION FOR THE LOGOUT HANDLER ---
+  const handleLogout = useCallback(() => {
+    setToken(null);
+    router.push("/");
+  }, [router]);
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -115,7 +121,7 @@ export default function TeamDashboard() {
 
         const [allTeamsData, poolsData] = await Promise.all([
           api.tournaments.getTeams(tournamentId),
-          api.pools.list(tournamentId),
+          api.tournaments.listPools(tournamentId),
         ]);
         setAllTeams(allTeamsData);
         setPools(poolsData);
@@ -134,10 +140,8 @@ export default function TeamDashboard() {
     socket.on("connect", () => console.log("Connected to socket server!"));
     socket.on("auction_state_update", (state) => setAuctionState(state));
 
-    // --- THIS IS THE REWRITTEN, ROBUST UPDATE LOGIC ---
     socket.on("squad_update", (updatedTeams) => {
       setAllTeams(updatedTeams);
-      // Use a functional update to safely update your own team's data
       setMyTeam((currentMyTeam) => {
         if (!currentMyTeam) return null;
         const myUpdatedTeam = updatedTeams.find(
@@ -382,18 +386,38 @@ export default function TeamDashboard() {
               Purse Remaining: {formatCurrency(activeViewData.header.purse)}
             </p>
           </div>
-          {activeViewData.isMyTeamView && (
-            <Link
-              href="/team/submission"
-              className="mt-4 md:mt-0 px-6 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
-              style={{
-                borderColor: activeViewData.header.accent,
-                color: activeViewData.header.accent,
-              }}
+          <div className="flex items-center gap-4 mt-4 md:mt-0">
+            {activeViewData.isMyTeamView && (
+              <Link
+                href="/team/submission"
+                className="px-4 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
+                style={{
+                  borderColor: activeViewData.header.accent,
+                  color: activeViewData.header.accent,
+                }}
+              >
+                Squad Submission
+              </Link>
+            )}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600/70 hover:bg-red-600 rounded-md font-semibold transition-colors"
             >
-              Go to Squad Submission
-            </Link>
-          )}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Logout
+            </button>
+          </div>
         </header>
 
         <div className="flex border-b border-gray-700 mb-6 overflow-x-auto">

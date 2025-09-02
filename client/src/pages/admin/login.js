@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 
 export default function AdminLoginPage() {
+  // This URL points to your backend server's Google authentication route.
   const backendUrl =
     process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 

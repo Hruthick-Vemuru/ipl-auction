@@ -1,3 +1,10 @@
+/********************************************************************************
+ * --- FILE: client/src/pages/admin/auction/[tournamentId].js (FINAL) ---
+ ********************************************************************************/
+// This is the complete and final code for the Admin's Auction Control Panel.
+// It includes the dynamic Pool Manager, player/pool deletion, performance optimizations,
+// the live bidding controls, and all styling fixes for forms.
+
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -96,6 +103,7 @@ const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
     basePrice: { value: 20, unit: "Lakhs" },
   });
   const [msg, setMsg] = useState("");
+
   const handleChange = useCallback(
     (e) => setPlayer((prev) => ({ ...prev, [e.target.name]: e.target.value })),
     []
@@ -273,7 +281,7 @@ const PoolManager = memo(function PoolManager({
     if (!tournamentId) return;
     try {
       const [poolsData, unassignedData] = await Promise.all([
-        api.pools.list(tournamentId),
+        api.tournaments.listPools(tournamentId),
         api.players.getUnassigned(tournamentId),
       ]);
       setPools(poolsData);
@@ -298,9 +306,8 @@ const PoolManager = memo(function PoolManager({
 
   const handleCreatePool = useCallback(async () => {
     if (!newPoolName) return;
-    const newPool = await api.pools.create({
+    const newPool = await api.tournaments.createPool(tournamentId, {
       name: newPoolName,
-      tournament: tournamentId,
       order: pools.length,
     });
     setNewPoolName("");
@@ -322,7 +329,7 @@ const PoolManager = memo(function PoolManager({
           const updatedSourcePlayers = sourcePool.players
             .filter((p) => p._id !== playerId)
             .map((p) => p._id);
-          await api.pools.update(sourcePool._id, {
+          await api.tournaments.updatePool(tournamentId, sourcePool._id, {
             players: updatedSourcePlayers,
           });
         }
@@ -331,7 +338,7 @@ const PoolManager = memo(function PoolManager({
             ...targetPool.players.map((p) => p._id),
             playerId,
           ];
-          await api.pools.update(targetPool._id, {
+          await api.tournaments.updatePool(tournamentId, targetPool._id, {
             players: updatedTargetPlayers,
           });
         }
@@ -343,7 +350,7 @@ const PoolManager = memo(function PoolManager({
         setIsMoving(false);
       }
     },
-    [pools, refreshData]
+    [pools, refreshData, tournamentId]
   );
 
   const handleDeletePlayerRequest = useCallback(
@@ -373,7 +380,7 @@ const PoolManager = memo(function PoolManager({
         async () => {
           setIsMoving(true);
           try {
-            await api.pools.delete(pool._id);
+            await api.tournaments.deletePool(tournamentId, pool._id);
             setSelectedPoolId(null);
             await refreshData();
           } catch (error) {
@@ -384,7 +391,7 @@ const PoolManager = memo(function PoolManager({
         }
       );
     },
-    [onShowConfirm, refreshData]
+    [onShowConfirm, refreshData, tournamentId]
   );
 
   const selectedPool = pools.find((p) => p._id === selectedPoolId);
@@ -526,9 +533,6 @@ export default function AuctionControlPanel() {
       setTeams(updatedTeams)
     );
 
-    socketRef.current.on("auction_notification", (data) => {
-      setNotification(data);
-    });
     return () => socketRef.current.disconnect();
   }, [tournamentId, router]);
 

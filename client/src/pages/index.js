@@ -1,3 +1,10 @@
+/********************************************************************************
+ * --- FILE: client/src/pages/index.js (FINAL REDESIGN) ---
+ ********************************************************************************/
+// FINAL VERSION: This homepage has been completely redesigned with a professional
+// background image, a strong title, an engaging tagline, and a polished
+// "glassmorphism" UI to create an impactful first impression.
+
 import Link from "next/link";
 
 export default function ChooseRole() {
@@ -15,7 +22,7 @@ export default function ChooseRole() {
 
       <div className="relative z-10 bg-black/40 backdrop-blur-md p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-lg text-center border border-white/10">
         <h1 className="text-5xl md:text-6xl font-bold mb-4 text-blue-400 tracking-tight">
-          Hruthick&apos;s Auction Table
+          Hruthick's Auction Table
         </h1>
         <p className="text-gray-300 mb-10 text-lg">
           The Ultimate Platform for Live Sports Auctions. Your Auction, Your
@@ -32,7 +39,7 @@ export default function ChooseRole() {
             href="/team/login"
             className="w-full text-center py-3 px-4 bg-teal-500 hover:bg-teal-600 rounded-lg text-lg font-semibold transition-transform transform hover:scale-105"
           >
-            I&apos;m a Team Owner
+            I'm a Team Owner
           </Link>
         </div>
       </div>

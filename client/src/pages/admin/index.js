@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken } from "../../lib/api";
+import { api, getToken, setToken } from "../../lib/api";
 
 // --- Reusable Components (Notification, ConfirmationModal, CurrencyInput) ---
 const Notification = memo(function Notification({ message, type, onClose }) {
@@ -91,6 +91,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
+  const [admin, setAdmin] = useState(null);
 
   const [teamData, setTeamData] = useState({
     name: "",
@@ -101,11 +102,26 @@ export default function AdminDashboard() {
     colorAccent: "#FFD700",
   });
 
+  const handleLogout = useCallback(() => {
+    setToken(null); // This clears the token from localStorage
+    router.push("/");
+  }, [router]);
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
       router.push("/admin/login");
     } else {
+      // Fetch the admin's own data when the page loads
+      api.auth
+        .meAdmin()
+        .then(setAdmin)
+        .catch((err) => {
+          console.error("Failed to fetch admin data:", err);
+          // If the token is invalid, log the user out
+          setToken(null);
+          router.push("/admin/login");
+        });
       refreshTournaments();
     }
   }, [router]);
@@ -252,7 +268,7 @@ export default function AdminDashboard() {
       purse: { ...prev.purse, unit: e.target.value },
     }));
 
-  if (isLoading) {
+  if (isLoading || !admin) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         Loading...
@@ -277,9 +293,34 @@ export default function AdminDashboard() {
         />
       )}
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold text-blue-400 mb-8">
-          Admin Dashboard
-        </h1>
+        <header className="flex justify-between items-center mb-8 pb-4 border-b border-gray-700">
+          <div>
+            <h1 className="text-4xl font-bold text-blue-400">
+              Admin Dashboard
+            </h1>
+            <p className="text-lg font-semibold text-gray-200 mt-1">
+              Welcome, <span className="text-yellow-400">{admin.name}</span>!
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600/80 hover:bg-red-600 rounded-md font-semibold transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Logout
+          </button>
+        </header>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <h2 className="text-2xl font-semibold mb-4 text-gray-200">

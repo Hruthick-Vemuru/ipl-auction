@@ -9,7 +9,7 @@ export default function AuthCallback() {
     // When the page loads, check if there's a token in the URL
     if (router.isReady) {
       const { token } = router.query;
-      if (token) {
+      if (token && typeof token === "string") {
         // If there is, save it and redirect to the dashboard
         setToken(token);
         router.push("/admin");

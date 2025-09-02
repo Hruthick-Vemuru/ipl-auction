@@ -52,6 +52,7 @@ export const api = {
       req("/api/auth/seed-admin", "POST", { email, password, name }),
     // --- THIS IS THE CORRECT FUNCTION ---
     me: () => req("/api/auth/me/team"),
+    meAdmin: () => req("/api/auth/me/admin"),
   },
   tournaments: {
     create: (payload) => req("/api/tournaments", "POST", payload),
@@ -63,6 +64,13 @@ export const api = {
     deleteTeam: (tournamentId, teamId) =>
       req(`/api/tournaments/${tournamentId}/teams/${teamId}`, "DELETE"),
     delete: (tournamentId) => req(`/api/tournaments/${tournamentId}`, "DELETE"),
+    listPools: (tournamentId) => req(`/api/tournaments/${tournamentId}/pools`),
+    createPool: (tournamentId, poolData) =>
+      req(`/api/tournaments/${tournamentId}/pools`, "POST", poolData),
+    updatePool: (tournamentId, poolId, poolData) =>
+      req(`/api/tournaments/${tournamentId}/pools/${poolId}`, "PUT", poolData),
+    deletePool: (tournamentId, poolId) =>
+      req(`/api/tournaments/${tournamentId}/pools/${poolId}`, "DELETE"),
   },
   players: {
     list: (q = "") => req("/api/players" + q),
@@ -71,12 +79,7 @@ export const api = {
       req(`/api/players/unassigned/${tournamentId}`),
     delete: (playerId) => req(`/api/players/${playerId}`, "DELETE"),
   },
-  pools: {
-    list: (tournamentId) => req(`/api/pools/tournament/${tournamentId}`),
-    create: (poolData) => req("/api/pools", "POST", poolData),
-    update: (poolId, poolData) => req(`/api/pools/${poolId}`, "PUT", poolData),
-    delete: (poolId) => req(`/api/pools/${poolId}`, "DELETE"),
-  },
+
   auction: {
     startPool: (tournamentId, poolId) =>
       req("/api/auction/start-pool", "POST", { tournamentId, poolId }),
