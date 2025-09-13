@@ -64,25 +64,22 @@ r.post("/grade", auth, async (req, res) => {
   res.json({ ok: true, submission: sub });
 });
 
-// The admin requests all submissions for a tournament here
-r.get("/tournament/:tournamentId", auth, async (req, res) => {
-  if (req.user.role !== "admin")
+r.get("/analytics/:tournamentId", auth, async (req, res) => {
+  if (req.user.role !== "admin" && req.user.role !== "team") {
     return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const { tournamentId } = req.params;
-    const tournament = await Tournament.findById(tournamentId);
+    const tournament = await Tournament.findById(tournamentId).populate(
+      "teams.players"
+    );
     if (!tournament)
       return res.status(404).json({ error: "Tournament not found" });
 
-    const teamIds = tournament.teams.map((t) => t._id);
-    const subs = await Submission.find({ team: { $in: teamIds } })
-      .populate("squad")
-      .populate("playingXI")
-      .populate("captain")
-      .populate("viceCaptain");
-    res.json(subs);
+    // Send the entire tournament object
+    res.json(tournament);
   } catch (e) {
-    console.error("Error fetching submissions:", e);
+    console.error("Error fetching analytics data:", e);
     res.status(500).json({ error: "An unexpected server error occurred." });
   }
 });

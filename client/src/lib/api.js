@@ -101,5 +101,7 @@ export const api = {
       req("/api/submissions/lock", "POST", { teamId, locked }),
     grade: (teamId, grade) =>
       req("/api/submissions/grade", "POST", { teamId, grade }),
+    getAnalytics: (tournamentId) =>
+      req(`/api/submissions/analytics/${tournamentId}`),
   },
 };

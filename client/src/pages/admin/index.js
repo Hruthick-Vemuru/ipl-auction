@@ -92,7 +92,8 @@ export default function AdminDashboard() {
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
   const [admin, setAdmin] = useState(null);
-
+  const [squadSize, setSquadSize] = useState(18);
+  const [overseasLimit, setOverseasLimit] = useState(6);
   const [teamData, setTeamData] = useState({
     name: "",
     username: "",
@@ -151,7 +152,12 @@ export default function AdminDashboard() {
         type: "error",
       });
     try {
-      await api.tournaments.create({ title });
+      // --- UPDATED API CALL ---
+      await api.tournaments.create({
+        title,
+        maxSquadSize: squadSize,
+        maxOverseasPlayers: overseasLimit,
+      });
       setTitle("");
       await refreshTournaments();
       setNotification({
@@ -164,7 +170,7 @@ export default function AdminDashboard() {
         type: "error",
       });
     }
-  }, [title, refreshTournaments]);
+  }, [title, squadSize, overseasLimit, refreshTournaments]);
 
   const createTeam = useCallback(async () => {
     if (!selTournament)
@@ -326,18 +332,42 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-semibold mb-4 text-gray-200">
               Manage Tournaments
             </h2>
-            <div className="flex gap-2 mb-6">
+            <div className="space-y-4 mb-6">
               <input
                 placeholder="New Tournament Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="flex-grow p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                className="w-full p-2 bg-gray-700 rounded-md"
               />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-400">
+                    Max Squad Size
+                  </label>
+                  <input
+                    type="number"
+                    value={squadSize}
+                    onChange={(e) => setSquadSize(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-700 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">
+                    Max Overseas Players
+                  </label>
+                  <input
+                    type="number"
+                    value={overseasLimit}
+                    onChange={(e) => setOverseasLimit(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-700 rounded-md"
+                  />
+                </div>
+              </div>
               <button
                 onClick={createTournament}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold transition-colors"
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold transition-colors"
               >
-                Create
+                Create Tournament
               </button>
             </div>
             <h3 className="text-xl font-semibold mb-2 text-gray-300">

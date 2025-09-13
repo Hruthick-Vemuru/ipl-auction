@@ -387,6 +387,12 @@ export default function TeamDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4 mt-4 md:mt-0">
+            <Link
+              href={`/team/analytics/${myTeam.tournament}`}
+              className="px-4 py-2 rounded-lg font-semibold bg-blue-600/80 hover:bg-blue-600 transition-colors"
+            >
+              View Analytics
+            </Link>
             {activeViewData.isMyTeamView && (
               <Link
                 href="/team/submission"

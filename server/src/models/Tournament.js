@@ -32,7 +32,10 @@ const tournamentSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     teams: [teamSchema],
     pools: [poolSchema], // The pools array will store pool sub-documents
+    maxSquadSize: { type: Number, default: 18 },
+    maxOverseasPlayers: { type: Number, default: 6 },
   },
+
   { timestamps: true }
 );
 
