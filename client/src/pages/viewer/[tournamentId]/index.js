@@ -79,10 +79,9 @@ export default function ViewerDashboard() {
   const [pools, setPools] = useState([]);
   const [activeTab, setActiveTab] = useState("auction_room");
   const [isLoading, setIsLoading] = useState(true);
-  const [notification, setNotification] = useState(null); // State for notifications
+  const [notification, setNotification] = useState(null);
 
-  // Default theme for the viewer mode
-  const VIEWER_THEME = { primary: "#111827", accent: "#D4AF37" }; // Black & Gold
+  const VIEWER_THEME = { primary: "#111827", accent: "#D4AF37" };
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -115,12 +114,7 @@ export default function ViewerDashboard() {
       setTournamentData((prev) => ({ ...prev, teams: updatedTeams }));
     });
     socket.on("pools_update", (updatedPools) => setPools(updatedPools));
-
-    // --- THIS IS THE FIX ---
-    // Listen for the auction notification event from the server
-    socket.on("auction_notification", (data) => {
-      setNotification(data);
-    });
+    socket.on("auction_notification", (data) => setNotification(data));
 
     return () => socket.disconnect();
   }, [tournamentId]);
@@ -136,9 +130,7 @@ export default function ViewerDashboard() {
         },
       };
     }
-
     const viewedTeam = tournamentData.teams.find((t) => t._id === activeTab);
-
     const primaryColor = viewedTeam?.colorPrimary || VIEWER_THEME.primary;
     const accentColor = viewedTeam?.colorAccent || VIEWER_THEME.accent;
     const headerName = viewedTeam?.name || tournamentData.title;
@@ -288,7 +280,6 @@ export default function ViewerDashboard() {
         backgroundAttachment: "fixed",
       }}
     >
-      {/* Render Notification component */}
       {notification && (
         <Notification
           message={notification.message}

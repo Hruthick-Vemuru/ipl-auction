@@ -16,7 +16,9 @@ const parseCurrency = (amount) => {
 };
 const r = Router();
 
-// Create Tournament - UPDATED to include new limits
+// --- PROTECTED ADMIN ROUTES ---
+
+// Create Tournament
 r.post("/", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -46,7 +48,7 @@ r.post("/", auth, async (req, res) => {
   }
 });
 
-// Create Team (now pushes a sub-document into a tournament)
+// Create Team in a Tournament
 r.post("/:tournamentId/teams", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -94,7 +96,7 @@ r.post("/:tournamentId/teams", auth, async (req, res) => {
   }
 });
 
-// Get Teams for a Tournament
+// Get Teams for a Tournament (for admin/team)
 r.get("/:tournamentId/teams", auth, async (req, res) => {
   if (req.user.role !== "admin" && req.user.role !== "team")
     return res.status(403).json({ error: "Forbidden" });
@@ -182,43 +184,6 @@ r.delete("/:tournamentId/teams/:teamId", auth, async (req, res) => {
   }
 });
 
-// Public route to get a tournament by its code
-r.get("/public/code/:code", async (req, res) => {
-  try {
-    const tournament = await Tournament.findOne({
-      code: req.params.code.toUpperCase(),
-      active: true,
-    }).select("_id"); // Only send the ID
-    if (!tournament) {
-      return res.status(404).json({ error: "Active tournament not found" });
-    }
-    res.json(tournament);
-  } catch (e) {
-    res.status(500).json({ error: "Server error fetching tournament by code" });
-  }
-});
-
-// Public route for analytics, no auth required
-r.get("/public/analytics/:tournamentId", async (req, res) => {
-  try {
-    const { tournamentId } = req.params;
-    const tournament = await Tournament.findById(tournamentId).populate({
-      path: "teams",
-      populate: {
-        path: "players",
-        model: "Player",
-      },
-    });
-    if (!tournament)
-      return res.status(404).json({ error: "Tournament not found" });
-
-    res.json(tournament);
-  } catch (e) {
-    console.error("Error fetching public analytics data:", e);
-    res.status(500).json({ error: "An unexpected server error occurred." });
-  }
-});
-
 // Get Admin's Tournaments
 r.get("/my", auth, async (req, res) => {
   if (req.user.role !== "admin")
@@ -227,27 +192,31 @@ r.get("/my", auth, async (req, res) => {
   res.json(tournaments);
 });
 
-// Get Tournament info by code (for team login)
-r.get("/code/:code", async (req, res) => {
-  const tournament = await Tournament.findOne({ code: req.params.code });
-  if (!tournament)
-    return res.status(404).json({ error: "Tournament not found" });
-  res.json({
-    id: tournament._id,
-    title: tournament.title,
-    active: tournament.active,
-    code: tournament.code,
-  });
-});
-
-// Get a single tournament by its MongoDB ID (for admin)
+// --- THIS IS THE CORRECTED ROUTE ---
+// Get a single tournament by ID (for admins OR a team member of that tournament)
 r.get("/:tournamentId", auth, async (req, res) => {
-  if (req.user.role !== "admin")
-    return res.status(403).json({ error: "Forbidden" });
   try {
     const tournament = await Tournament.findById(req.params.tournamentId);
-    if (!tournament)
+    if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // A user is authorized if they are the admin of this tournament OR a team member within it.
+    const isAdminOwner =
+      req.user.role === "admin" &&
+      String(tournament.admin) === String(req.user.id);
+    const isTeamMemberOfTournament =
+      req.user.role === "team" &&
+      String(req.user.tournamentId) === String(tournament._id);
+
+    if (!isAdminOwner && !isTeamMemberOfTournament) {
+      return res
+        .status(403)
+        .json({
+          error: "You are not authorized to view this tournament's details.",
+        });
+    }
+
     res.json(tournament);
   } catch (e) {
     res.status(500).json({ error: "Server error" });
@@ -304,7 +273,7 @@ r.get("/:tournamentId/pools", auth, async (req, res) => {
   }
 });
 
-// Admin creates a new pool in a tournament and broadcasts the change
+// Admin creates a new pool in a tournament
 r.post("/:tournamentId/pools", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -385,7 +354,59 @@ r.delete("/:tournamentId/pools/:poolId", auth, async (req, res) => {
   }
 });
 
-// --- Public route for fetching pools ---
+// --- PUBLIC ROUTES (No auth needed) ---
+
+// Get Tournament info by code (for team login page)
+r.get("/code/:code", async (req, res) => {
+  const tournament = await Tournament.findOne({ code: req.params.code });
+  if (!tournament)
+    return res.status(404).json({ error: "Tournament not found" });
+  res.json({
+    id: tournament._id,
+    title: tournament.title,
+    active: tournament.active,
+    code: tournament.code,
+  });
+});
+
+// Public route to get a tournament by its code
+r.get("/public/code/:code", async (req, res) => {
+  try {
+    const tournament = await Tournament.findOne({
+      code: req.params.code.toUpperCase(),
+      active: true,
+    }).select("_id");
+    if (!tournament) {
+      return res.status(404).json({ error: "Active tournament not found" });
+    }
+    res.json(tournament);
+  } catch (e) {
+    res.status(500).json({ error: "Server error fetching tournament by code" });
+  }
+});
+
+// Public route for analytics
+r.get("/public/analytics/:tournamentId", async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const tournament = await Tournament.findById(tournamentId).populate({
+      path: "teams",
+      populate: {
+        path: "players",
+        model: "Player",
+      },
+    });
+    if (!tournament)
+      return res.status(404).json({ error: "Tournament not found" });
+
+    res.json(tournament);
+  } catch (e) {
+    console.error("Error fetching public analytics data:", e);
+    res.status(500).json({ error: "An unexpected server error occurred." });
+  }
+});
+
+// Public route for fetching pools
 r.get("/public/:tournamentId/pools", async (req, res) => {
   try {
     const tournament = await Tournament.findById(
