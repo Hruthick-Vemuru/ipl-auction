@@ -14,8 +14,7 @@ export const SESSION_SECRET =
 export const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
 export const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
-// --- NEW: EMAIL SERVER (SMTP) EXPORTS ---
-// These variables are loaded from your .env file and used by nodemailer
+// --- EMAIL SERVER (SMTP) EXPORTS ---
 export const EMAIL_HOST = process.env.EMAIL_HOST;
 export const EMAIL_PORT = process.env.EMAIL_PORT;
 export const EMAIL_USER = process.env.EMAIL_USER;
