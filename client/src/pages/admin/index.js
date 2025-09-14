@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, memo, useRef } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken, setToken } from "../../lib/api";
+import { api, getToken, setToken } from "@/lib/api";
 
-// --- Reusable Components (Notification, ConfirmationModal, CurrencyInput) ---
+// --- Reusable Components ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -47,7 +47,7 @@ const ConfirmationModal = memo(function ConfirmationModal({
             onClick={onConfirm}
             className="px-6 py-2 bg-red-600 hover:bg-red-500 rounded-md font-semibold transition-colors"
           >
-            Confirm Delete
+            Confirm
           </button>
         </div>
       </div>
@@ -92,23 +92,24 @@ export default function AdminDashboard() {
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
   const [admin, setAdmin] = useState(null);
-  const [minSquadSize, setMinSquadSize] = useState(15);
-  const [maxSquadSize, setMaxSquadSize] = useState(18);
-  const [overseasLimit, setOverseasLimit] = useState(6);
+  const [isEditing, setIsEditing] = useState(false);
 
-  // --- NEW: State for editing a team ---
-  const [editingTeam, setEditingTeam] = useState(null);
+  // Tournament settings state
+  const [tournamentSettings, setTournamentSettings] = useState({
+    minSquadSize: 11,
+    maxSquadSize: 18,
+    maxOverseasPlayers: 6,
+  });
 
-  const initialTeamState = {
+  const [teamData, setTeamData] = useState({
+    id: null,
     name: "",
     username: "",
     password: "",
     purse: { value: 100, unit: "Crores" },
     colorPrimary: "#0A2342",
     colorAccent: "#FFD700",
-  };
-
-  const [teamData, setTeamData] = useState(initialTeamState);
+  });
 
   const handleLogout = useCallback(() => {
     setToken(null);
@@ -120,12 +121,16 @@ export default function AdminDashboard() {
     if (!token) {
       router.push("/admin/login");
     } else {
-      api.auth.meAdmin().then(setAdmin).catch(handleLogout);
+      api.auth
+        .meAdmin()
+        .then(setAdmin)
+        .catch(() => router.push("/admin/login"));
       refreshTournaments();
     }
   }, [router]);
 
   const refreshTournaments = useCallback(async () => {
+    setIsLoading(true);
     try {
       const r = await api.tournaments.my();
       setTournaments(r);
@@ -135,7 +140,7 @@ export default function AdminDashboard() {
       }
     } catch (e) {
       setNotification({
-        message: "Failed to fetch tournaments: " + e.message,
+        message: "Failed to fetch tournaments",
         type: "error",
       });
     } finally {
@@ -145,82 +150,79 @@ export default function AdminDashboard() {
 
   const createTournament = useCallback(async () => {
     if (!title)
-      return setNotification({
-        message: "Tournament title is required",
-        type: "error",
-      });
+      return setNotification({ message: "Title required", type: "error" });
     try {
-      await api.tournaments.create({
-        title,
-        minSquadSize,
-        maxSquadSize,
-        maxOverseasPlayers: overseasLimit,
-      });
+      await api.tournaments.create({ title, ...tournamentSettings });
       setTitle("");
       await refreshTournaments();
-      setNotification({
-        message: "Tournament created successfully!",
-        type: "success",
-      });
+      setNotification({ message: "Tournament created!", type: "success" });
     } catch (e) {
-      setNotification({
-        message: "Error creating tournament: " + e.message,
-        type: "error",
-      });
+      setNotification({ message: e.message, type: "error" });
     }
-  }, [title, minSquadSize, maxSquadSize, overseasLimit, refreshTournaments]);
+  }, [title, tournamentSettings, refreshTournaments]);
 
-  // --- RENAMED & UPDATED: Handles both Create and Update ---
-  const handleTeamSubmit = useCallback(async () => {
-    if (!selTournament)
-      return setNotification({
-        message: "Please select a tournament first",
-        type: "error",
-      });
-    if (!teamData.name || !teamData.username) {
-      return setNotification({
-        message: "Team Name and Username are required",
-        type: "error",
-      });
-    }
-    // Password is only required when creating a new team
-    if (!editingTeam && !teamData.password) {
-      return setNotification({
-        message: "Password is required for new teams",
-        type: "error",
-      });
-    }
+  const resetTeamForm = () => {
+    setIsEditing(false);
+    setTeamData({
+      id: null,
+      name: "",
+      username: "",
+      password: "",
+      purse: { value: 100, unit: "Crores" },
+      colorPrimary: "#0A2342",
+      colorAccent: "#FFD700",
+    });
+  };
 
+  const handleTeamSubmit = async () => {
+    if (!selTournament) return;
+    if (
+      !teamData.name ||
+      !teamData.username ||
+      (!teamData.password && !isEditing)
+    ) {
+      return setNotification({
+        message: "All team fields are required",
+        type: "error",
+      });
+    }
     try {
-      if (editingTeam) {
-        // Update existing team
+      if (isEditing) {
         await api.tournaments.updateTeam(
           selTournament._id,
-          editingTeam._id,
+          teamData.id,
           teamData
         );
-        setNotification({
-          message: "Team updated successfully!",
-          type: "success",
-        });
+        setNotification({ message: "Team updated!", type: "success" });
       } else {
-        // Create new team
         await api.tournaments.createTeam(selTournament._id, teamData);
-        setNotification({
-          message: "Team created successfully!",
-          type: "success",
-        });
+        setNotification({ message: "Team created!", type: "success" });
       }
-      setTeamData(initialTeamState);
-      setEditingTeam(null);
+      resetTeamForm();
       await refreshTournaments();
     } catch (e) {
-      setNotification({
-        message: `Error: ${e.message}`,
-        type: "error",
-      });
+      setNotification({ message: e.message, type: "error" });
     }
-  }, [selTournament, teamData, editingTeam, refreshTournaments]);
+  };
+
+  const handleEditTeam = (team) => {
+    setIsEditing(true);
+    setTeamData({
+      id: team._id,
+      name: team.name,
+      username: team.username,
+      password: "", // Password field is cleared for security
+      purse: {
+        value:
+          team.purseRemaining >= 10000000
+            ? team.purseRemaining / 10000000
+            : team.purseRemaining / 100000,
+        unit: team.purseRemaining >= 10000000 ? "Crores" : "Lakhs",
+      },
+      colorPrimary: team.colorPrimary,
+      colorAccent: team.colorAccent,
+    });
+  };
 
   const handleDeleteRequest = useCallback(
     (type, item) => {
@@ -232,7 +234,9 @@ export default function AdminDashboard() {
           if (type === "team" && selTournament)
             deleteTeam(selTournament._id, item._id);
           if (type === "tournament") deleteTournament(item._id);
+          setConfirmModal(null);
         },
+        onCancel: () => setConfirmModal(null),
       });
     },
     [selTournament]
@@ -242,18 +246,9 @@ export default function AdminDashboard() {
     async (tournamentId, teamId) => {
       try {
         await api.tournaments.deleteTeam(tournamentId, teamId);
-        setNotification({
-          message: "Team deleted successfully.",
-          type: "success",
-        });
         await refreshTournaments();
       } catch (e) {
-        setNotification({
-          message: "Error deleting team: " + e.message,
-          type: "error",
-        });
-      } finally {
-        setConfirmModal(null);
+        setNotification({ message: e.message, type: "error" });
       }
     },
     [refreshTournaments]
@@ -263,52 +258,14 @@ export default function AdminDashboard() {
     async (tournamentId) => {
       try {
         await api.tournaments.delete(tournamentId);
-        setNotification({ message: "Tournament deleted.", type: "success" });
         setSelTournament(null);
         await refreshTournaments();
       } catch (e) {
-        setNotification({
-          message: "Error deleting tournament: " + e.message,
-          type: "error",
-        });
-      } finally {
-        setConfirmModal(null);
+        setNotification({ message: e.message, type: "error" });
       }
     },
     [refreshTournaments]
   );
-
-  // --- NEW: Handlers for Edit and Impersonate ---
-  const handleEditTeam = useCallback((team) => {
-    setEditingTeam(team);
-    const purseInCrores = team.purseRemaining / 10000000;
-    setTeamData({
-      name: team.name,
-      username: team.username,
-      password: "", // Leave password blank for editing
-      purse: { value: purseInCrores, unit: "Crores" },
-      colorPrimary: team.colorPrimary,
-      colorAccent: team.colorAccent,
-    });
-  }, []);
-
-  const handleCancelEdit = () => {
-    setEditingTeam(null);
-    setTeamData(initialTeamState);
-  };
-
-  const handleImpersonateTeam = (team) => {
-    // This is a placeholder for a more complex feature.
-    // To implement fully:
-    // 1. Create a backend route for admins to get a temporary team token.
-    // 2. Call that route here, get the token.
-    // 3. Save the token with setToken(tempToken).
-    // 4. router.push('/team');
-    setNotification({
-      message: `Impersonate feature not yet built. Would log in as ${team.name}.`,
-      type: "success",
-    });
-  };
 
   const handleTeamFormChange = (e) =>
     setTeamData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -322,6 +279,11 @@ export default function AdminDashboard() {
       ...prev,
       purse: { ...prev.purse, unit: e.target.value },
     }));
+  const handleTournamentSettingsChange = (e) =>
+    setTournamentSettings((prev) => ({
+      ...prev,
+      [e.target.name]: Number(e.target.value),
+    }));
 
   if (isLoading || !admin) {
     return (
@@ -334,19 +296,9 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-8">
       {notification && (
-        <Notification
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification(null)}
-        />
+        <Notification {...notification} onClose={() => setNotification(null)} />
       )}
-      {confirmModal && (
-        <ConfirmationModal
-          message={confirmModal.message}
-          onConfirm={confirmModal.onConfirm}
-          onCancel={() => setConfirmModal(null)}
-        />
-      )}
+      {confirmModal && <ConfirmationModal {...confirmModal} />}
       <div className="max-w-7xl mx-auto">
         <header className="flex justify-between items-center mb-8 pb-4 border-b border-gray-700">
           <div>
@@ -357,24 +309,27 @@ export default function AdminDashboard() {
               Welcome, <span className="text-yellow-400">{admin.name}</span>!
             </p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600/80 hover:bg-red-600 rounded-md font-semibold transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
+          <div className="flex items-center gap-4">
+            {/* The settings link has been removed */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600/80 hover:bg-red-600 rounded-md font-semibold transition-colors"
             >
-              <path
-                fillRule="evenodd"
-                d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Logout
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Logout
+            </button>
+          </div>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
@@ -388,40 +343,37 @@ export default function AdminDashboard() {
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full p-2 bg-gray-700 rounded-md"
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm text-gray-400">
-                    Min Squad Size
-                  </label>
+                  <label className="text-sm text-gray-400">Min Squad</label>
                   <input
                     type="number"
-                    value={minSquadSize}
-                    onChange={(e) => setMinSquadSize(Number(e.target.value))}
+                    name="minSquadSize"
+                    value={tournamentSettings.minSquadSize}
+                    onChange={handleTournamentSettingsChange}
                     className="w-full p-2 bg-gray-700 rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-400">
-                    Max Squad Size
-                  </label>
+                  <label className="text-sm text-gray-400">Max Squad</label>
                   <input
                     type="number"
-                    value={maxSquadSize}
-                    onChange={(e) => setMaxSquadSize(Number(e.target.value))}
+                    name="maxSquadSize"
+                    value={tournamentSettings.maxSquadSize}
+                    onChange={handleTournamentSettingsChange}
                     className="w-full p-2 bg-gray-700 rounded-md"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="text-sm text-gray-400">
-                  Max Overseas Players
-                </label>
-                <input
-                  type="number"
-                  value={overseasLimit}
-                  onChange={(e) => setOverseasLimit(Number(e.target.value))}
-                  className="w-full p-2 bg-gray-700 rounded-md"
-                />
+                <div>
+                  <label className="text-sm text-gray-400">Max Overseas</label>
+                  <input
+                    type="number"
+                    name="maxOverseasPlayers"
+                    value={tournamentSettings.maxOverseasPlayers}
+                    onChange={handleTournamentSettingsChange}
+                    className="w-full p-2 bg-gray-700 rounded-md"
+                  />
+                </div>
               </div>
               <button
                 onClick={createTournament}
@@ -489,9 +441,7 @@ export default function AdminDashboard() {
           </div>
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <h2 className="text-2xl font-semibold mb-4 text-gray-200">
-              {editingTeam
-                ? `Editing "${editingTeam.name}"`
-                : selTournament
+              {selTournament
                 ? `Manage Teams for "${selTournament.title}"`
                 : "Select a Tournament"}
             </h2>
@@ -503,24 +453,24 @@ export default function AdminDashboard() {
                     name="name"
                     value={teamData.name}
                     onChange={handleTeamFormChange}
-                    className="p-2 bg-gray-700 border border-gray-600 rounded-md"
+                    className="p-2 bg-gray-700 rounded-md"
                   />
                   <input
                     placeholder="Team Username"
                     name="username"
                     value={teamData.username}
                     onChange={handleTeamFormChange}
-                    className="p-2 bg-gray-700 border border-gray-600 rounded-md"
+                    className="p-2 bg-gray-700 rounded-md"
                   />
                   <input
                     placeholder={
-                      editingTeam ? "New Password (optional)" : "Team Password"
+                      isEditing ? "New Password (optional)" : "Team Password"
                     }
                     name="password"
                     type="password"
                     value={teamData.password}
                     onChange={handleTeamFormChange}
-                    className="p-2 bg-gray-700 border border-gray-600 rounded-md"
+                    className="p-2 bg-gray-700 rounded-md"
                   />
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">
@@ -533,52 +483,50 @@ export default function AdminDashboard() {
                       onUnitChange={handlePurseUnitChange}
                     />
                   </div>
-                  <div className="sm:col-span-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        Primary Color
-                      </label>
-                      <input
-                        type="color"
-                        name="colorPrimary"
-                        value={teamData.colorPrimary}
-                        onChange={handleTeamFormChange}
-                        className="w-full h-10 p-1 bg-gray-700 rounded-md"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        Accent Color
-                      </label>
-                      <input
-                        type="color"
-                        name="colorAccent"
-                        value={teamData.colorAccent}
-                        onChange={handleTeamFormChange}
-                        className="w-full h-10 p-1 bg-gray-700 rounded-md"
-                      />
+                  <div className="sm:col-span-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">
+                          Primary Color
+                        </label>
+                        <input
+                          type="color"
+                          name="colorPrimary"
+                          value={teamData.colorPrimary}
+                          onChange={handleTeamFormChange}
+                          className="w-full h-10 p-1 bg-gray-700 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">
+                          Accent Color
+                        </label>
+                        <input
+                          type="color"
+                          name="colorAccent"
+                          value={teamData.colorAccent}
+                          onChange={handleTeamFormChange}
+                          className="w-full h-10 p-1 bg-gray-700 rounded-md"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-4">
-                  {editingTeam && (
+                  <button
+                    onClick={handleTeamSubmit}
+                    className="w-full py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
+                  >
+                    {isEditing ? "Update Team" : "Create Team"}
+                  </button>
+                  {isEditing && (
                     <button
-                      onClick={handleCancelEdit}
-                      className="w-full py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold"
+                      onClick={resetTeamForm}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md"
                     >
                       Cancel
                     </button>
                   )}
-                  <button
-                    onClick={handleTeamSubmit}
-                    className={`w-full py-2 ${
-                      editingTeam
-                        ? "bg-yellow-600 hover:bg-yellow-700"
-                        : "bg-green-600 hover:bg-green-700"
-                    } rounded-md font-semibold`}
-                  >
-                    {editingTeam ? "Update Team" : "Create Team"}
-                  </button>
                 </div>
                 <hr className="my-6 border-gray-600" />
                 <h3 className="text-xl font-semibold mb-2 text-gray-300">
@@ -600,11 +548,10 @@ export default function AdminDashboard() {
                         ></div>
                         <span className="font-medium">{team.name}</span>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleImpersonateTeam(team)}
+                          title="Impersonate (Coming Soon)"
                           className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Impersonate Team"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -612,18 +559,17 @@ export default function AdminDashboard() {
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
-                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                             <path
                               fillRule="evenodd"
-                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.27 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 17a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
                               clipRule="evenodd"
                             />
                           </svg>
                         </button>
                         <button
                           onClick={() => handleEditTeam(team)}
-                          className="text-gray-400 hover:text-yellow-400 transition-colors opacity-0 group-hover:opacity-100"
                           title="Edit Team"
+                          className="text-gray-400 hover:text-yellow-400 transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -631,18 +577,13 @@ export default function AdminDashboard() {
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
-                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                            <path
-                              fillRule="evenodd"
-                              d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                              clipRule="evenodd"
-                            />
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                           </svg>
                         </button>
                         <button
                           onClick={() => handleDeleteRequest("team", team)}
-                          className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                           title="Delete Team"
+                          className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"

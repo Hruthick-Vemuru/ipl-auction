@@ -4,7 +4,7 @@ import cors from "cors";
 import morgan from "morgan";
 import session from "express-session";
 import passport from "passport";
-import "./passport-setup.js"; // Note: Corrected path from previous fixes
+import "./passport-setup.js";
 import { PORT, MONGO_URI, ALLOW_ORIGIN, SESSION_SECRET } from "../config.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -15,7 +15,7 @@ import tournamentRoutes from "./routes/tournaments.js";
 import playerRoutes from "./routes/players.js";
 import auctionRoutes from "./routes/auction.js";
 import submissionRoutes from "./routes/submissions.js";
-// The `teamRoutes` and `poolRoutes` are correctly removed from here in the embedded architecture
+// The settingsRoutes import has been removed.
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,7 +25,6 @@ const allowedOrigins = ALLOW_ORIGIN.split(",").map((origin) => origin.trim());
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // This logic allows requests from any URL in your ALLOW_ORIGIN list.
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
@@ -63,6 +62,7 @@ app.use("/api/tournaments", tournamentRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/api/auction", auctionRoutes);
 app.use("/api/submissions", submissionRoutes);
+// The app.use("/api/settings", ...) line has been removed.
 
 // --- Database and Server Start ---
 mongoose

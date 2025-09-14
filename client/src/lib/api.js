@@ -40,7 +40,13 @@ async function req(path, method = "GET", body) {
 
 export const api = {
   auth: {
-    login: (email, password) =>
+    // --- NEW OTP-BASED REGISTRATION FUNCTIONS ---
+    sendAdminOtp: (name, email, password) =>
+      req("/api/auth/register/send-otp", "POST", { name, email, password }),
+    verifyAdminOtp: (email, otp) =>
+      req("/api/auth/register/verify-otp", "POST", { email, otp }),
+
+    adminLogin: (email, password) =>
       req("/api/auth/login", "POST", { email, password }),
     teamLogin: (tournamentCode, username, password) =>
       req("/api/auth/team-login", "POST", {
@@ -48,14 +54,21 @@ export const api = {
         username,
         password,
       }),
-    seedAdmin: (email, password, name) =>
-      req("/api/auth/seed-admin", "POST", { email, password, name }),
     me: () => req("/api/auth/me/team"),
     meAdmin: () => req("/api/auth/me/admin"),
   },
+
+  // --- NEW SETTINGS API FUNCTIONS ---
+  settings: {
+    getSmtp: () => req("/api/settings/smtp"),
+    saveSmtp: (settingsData) => req("/api/settings/smtp", "POST", settingsData),
+  },
+
   tournaments: {
     getPublicTournamentByCode: (code) =>
       req(`/api/tournaments/public/code/${code}`),
+    getPublicPools: (tournamentId) =>
+      req(`/api/tournaments/public/${tournamentId}/pools`),
     getPublicAnalytics: (tournamentId) =>
       req(`/api/tournaments/public/analytics/${tournamentId}`),
     create: (payload) => req("/api/tournaments", "POST", payload),
@@ -70,8 +83,6 @@ export const api = {
       req(`/api/tournaments/${tournamentId}/teams/${teamId}`, "DELETE"),
     delete: (tournamentId) => req(`/api/tournaments/${tournamentId}`, "DELETE"),
     listPools: (tournamentId) => req(`/api/tournaments/${tournamentId}/pools`),
-    getPublicPools: (tournamentId) =>
-      req(`/api/tournaments/public/${tournamentId}/pools`),
     createPool: (tournamentId, poolData) =>
       req(`/api/tournaments/${tournamentId}/pools`, "POST", poolData),
     updatePool: (tournamentId, poolId, poolData) =>
@@ -86,7 +97,6 @@ export const api = {
       req(`/api/players/unassigned/${tournamentId}`),
     delete: (playerId) => req(`/api/players/${playerId}`, "DELETE"),
   },
-
   auction: {
     startPool: (tournamentId, poolId) =>
       req("/api/auction/start-pool", "POST", { tournamentId, poolId }),

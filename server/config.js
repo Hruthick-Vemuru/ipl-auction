@@ -11,5 +11,12 @@ export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 export const SESSION_SECRET =
   process.env.SESSION_SECRET || "a-very-long-random-string-for-sessions";
 
-// --- THIS IS THE NEW, CRITICAL EXPORT LINE ---
 export const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
+export const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
+
+// --- NEW: EMAIL SERVER (SMTP) EXPORTS ---
+// These variables are loaded from your .env file and used by nodemailer
+export const EMAIL_HOST = process.env.EMAIL_HOST;
+export const EMAIL_PORT = process.env.EMAIL_PORT;
+export const EMAIL_USER = process.env.EMAIL_USER;
+export const EMAIL_PASS = process.env.EMAIL_PASS;
