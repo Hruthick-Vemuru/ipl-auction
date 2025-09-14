@@ -15,12 +15,12 @@ import tournamentRoutes from "./routes/tournaments.js";
 import playerRoutes from "./routes/players.js";
 import auctionRoutes from "./routes/auction.js";
 import submissionRoutes from "./routes/submissions.js";
-// The settingsRoutes import has been removed.
 
 const app = express();
 const httpServer = createServer(app);
 
 // --- CORS Configuration ---
+// This now correctly uses your ALLOW_ORIGIN from Render's environment
 const allowedOrigins = ALLOW_ORIGIN.split(",").map((origin) => origin.trim());
 
 const corsOptions = {
@@ -28,6 +28,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
+      console.error(`CORS error: Origin ${origin} not allowed.`);
       return callback(new Error(`The origin ${origin} is not allowed by CORS`));
     }
   },
@@ -48,6 +49,7 @@ app.use(
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    // Production settings for cookies can be added here if needed
   })
 );
 app.use(passport.initialize());
@@ -62,7 +64,6 @@ app.use("/api/tournaments", tournamentRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/api/auction", auctionRoutes);
 app.use("/api/submissions", submissionRoutes);
-// The app.use("/api/settings", ...) line has been removed.
 
 // --- Database and Server Start ---
 mongoose
@@ -72,6 +73,6 @@ mongoose
     httpServer.listen(PORT, () => console.log("Server running on", PORT));
   })
   .catch((err) => {
-    console.error("Mongo error", err);
+    console.error("Mongo connection error:", err);
     process.exit(1);
   });
