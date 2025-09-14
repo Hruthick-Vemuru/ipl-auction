@@ -156,9 +156,11 @@ r.post("/sell", auth, async (req, res) => {
         : `Pool "${currentState.currentPool}" is finished.`
     }`;
 
+    // --- Broadcast all updates to clients ---
     const updatedTournamentForBroadcast = await Tournament.findById(
       tournamentId
     ).populate("teams.players");
+
     io.to(tournamentId).emit(
       "squad_update",
       updatedTournamentForBroadcast.teams
@@ -167,6 +169,14 @@ r.post("/sell", auth, async (req, res) => {
       "pools_update",
       updatedTournamentForBroadcast.pools
     );
+
+    // --- THIS IS THE NOTIFICATION EMIT FOR SOLD PLAYERS ---
+    io.to(tournamentId).emit("auction_notification", {
+      message: `${player.name} sold to ${team.name} for ${formatCurrency(
+        priceAmount
+      )}`,
+      type: "success",
+    });
 
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
@@ -227,6 +237,7 @@ r.post("/unsold", auth, async (req, res) => {
         : `Pool "${currentState.currentPool}" has finished.`
     }`;
 
+    // --- THIS IS THE NOTIFICATION EMIT FOR UNSOLD PLAYERS ---
     io.to(tournamentId).emit("auction_notification", {
       message: `${player.name} is unsold.`,
       type: "error",

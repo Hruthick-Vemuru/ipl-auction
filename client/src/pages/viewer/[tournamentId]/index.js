@@ -5,6 +5,30 @@ import { api } from "@/lib/api";
 import { io } from "socket.io-client";
 import { formatCurrency } from "@/lib/utils";
 
+// --- Notification Component ---
+const Notification = memo(function Notification({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [onClose, message, type]);
+  const baseClasses =
+    "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 transition-opacity duration-300";
+  const typeClasses = type === "success" ? "bg-green-600" : "bg-red-600";
+  return (
+    <div className={`${baseClasses} ${typeClasses}`}>
+      {message}
+      <button
+        onClick={onClose}
+        className="ml-4 font-bold opacity-70 hover:opacity-100"
+      >
+        X
+      </button>
+    </div>
+  );
+});
+
 // Re-usable PlayerCard component
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
   return (
@@ -55,6 +79,7 @@ export default function ViewerDashboard() {
   const [pools, setPools] = useState([]);
   const [activeTab, setActiveTab] = useState("auction_room");
   const [isLoading, setIsLoading] = useState(true);
+  const [notification, setNotification] = useState(null); // State for notifications
 
   // Default theme for the viewer mode
   const VIEWER_THEME = { primary: "#111827", accent: "#D4AF37" }; // Black & Gold
@@ -91,6 +116,12 @@ export default function ViewerDashboard() {
     });
     socket.on("pools_update", (updatedPools) => setPools(updatedPools));
 
+    // --- THIS IS THE FIX ---
+    // Listen for the auction notification event from the server
+    socket.on("auction_notification", (data) => {
+      setNotification(data);
+    });
+
     return () => socket.disconnect();
   }, [tournamentId]);
 
@@ -108,7 +139,6 @@ export default function ViewerDashboard() {
 
     const viewedTeam = tournamentData.teams.find((t) => t._id === activeTab);
 
-    // Use default theme for auction room, or team theme for team tabs
     const primaryColor = viewedTeam?.colorPrimary || VIEWER_THEME.primary;
     const accentColor = viewedTeam?.colorAccent || VIEWER_THEME.accent;
     const headerName = viewedTeam?.name || tournamentData.title;
@@ -258,6 +288,14 @@ export default function ViewerDashboard() {
         backgroundAttachment: "fixed",
       }}
     >
+      {/* Render Notification component */}
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
       <div className="max-w-7xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
