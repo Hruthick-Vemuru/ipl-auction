@@ -5,6 +5,7 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import Tournament from "../models/Tournament.js";
+import Submission from "../models/Submission.js"; // <-- THE MISSING IMPORT IS NOW ADDED
 import {
   JWT_SECRET,
   CLIENT_URL,
@@ -22,12 +23,11 @@ const r = Router();
 
 // --- Nodemailer Transport Setup (using .env variables) ---
 let transporter;
-// Initialize transporter only if all required env variables are present
 if (EMAIL_HOST && EMAIL_PORT && EMAIL_USER && EMAIL_PASS) {
   transporter = nodemailer.createTransport({
     host: EMAIL_HOST,
     port: EMAIL_PORT,
-    secure: EMAIL_PORT == 465, // true for 465, false for other ports
+    secure: EMAIL_PORT == 465,
     auth: {
       user: EMAIL_USER,
       pass: EMAIL_PASS,
@@ -57,7 +57,7 @@ r.post("/register/send-otp", async (req, res) => {
   }
 
   const otp = crypto.randomInt(100000, 999999).toString();
-  const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
   const passwordHash = await bcrypt.hash(password, 10);
 
   await User.findOneAndUpdate(
@@ -91,7 +91,6 @@ r.post("/register/send-otp", async (req, res) => {
         });
     }
   } else {
-    // Fallback if SMTP is not configured in .env
     console.log("-----------------------------------------");
     console.log("SMTP NOT CONFIGURED. OTP for " + email + ": " + otp);
     console.log("-----------------------------------------");
@@ -168,7 +167,7 @@ r.post("/login", async (req, res) => {
 r.post("/team-login", async (req, res) => {
   const { tournamentCode, username, password } = req.body;
   const tournament = await Tournament.findOne({
-    code: tournamentCode,
+    code: tournamentCode.toUpperCase(),
     active: true,
   });
   if (!tournament)
@@ -199,21 +198,35 @@ r.post("/team-login", async (req, res) => {
   });
 });
 
-// Get logged-in team's own data
+// Get logged-in team's own data - REWRITTEN FOR STABILITY
 r.get("/me/team", auth, async (req, res) => {
-  if (req.user.role !== "team")
+  if (req.user.role !== "team") {
     return res.status(403).json({ error: "Forbidden" });
+  }
+
   try {
     const { tournamentId, teamId } = req.user;
 
-    const tournament = await Tournament.findById(tournamentId).populate(
-      "teams.players"
-    );
-    if (!tournament)
+    const tournament = await Tournament.findById(tournamentId).populate({
+      path: "teams",
+      populate: {
+        path: "players",
+        model: "Player",
+      },
+    });
+
+    if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
+    }
 
     const teamSubDoc = tournament.teams.id(teamId);
-    if (!teamSubDoc) return res.status(404).json({ error: "Team not found" });
+    if (!teamSubDoc) {
+      return res
+        .status(404)
+        .json({
+          error: "Team not found in this tournament. Please log in again.",
+        });
+    }
 
     const submission = await Submission.findOne({ team: teamId }).populate(
       "squad playingXI captain viceCaptain"
@@ -225,8 +238,8 @@ r.get("/me/team", auth, async (req, res) => {
 
     res.json(teamObject);
   } catch (e) {
-    console.error("Error fetching team 'me':", e);
-    res.status(500).json({ error: "Server error" });
+    console.error("Error fetching team 'me' data:", e);
+    res.status(500).json({ error: "Server error while fetching team data." });
   }
 });
 
@@ -245,13 +258,16 @@ r.get("/me/admin", auth, async (req, res) => {
 });
 
 // Google OAuth routes
-r.get("/google", passport.authenticate("google"));
+r.get(
+  "/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
 
 r.get(
   "/google/callback",
   passport.authenticate("google", {
     session: false,
-    failureRedirect: "/login/failed",
+    failureRedirect: "/admin/login",
   }),
   (req, res) => {
     const user = req.user;

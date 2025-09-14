@@ -4,7 +4,7 @@ const submissionSchema = new mongoose.Schema(
   {
     team: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Team",
+      // ref: "Team", // <-- THIS LINE WAS INCORRECT AND HAS BEEN REMOVED.
       required: true,
       unique: true,
     },
@@ -13,7 +13,7 @@ const submissionSchema = new mongoose.Schema(
     captain: { type: mongoose.Schema.Types.ObjectId, ref: "Player" },
     viceCaptain: { type: mongoose.Schema.Types.ObjectId, ref: "Player" },
     locked: { type: Boolean, default: false },
-    grade: { type: String }, // The admin's grade is saved here
+    grade: { type: String },
   },
   { timestamps: true }
 );
