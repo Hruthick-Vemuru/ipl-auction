@@ -1,12 +1,5 @@
-/********************************************************************************
- * --- FILE: server/src/routes/auction.js (CORRECTED) ---
- ********************************************************************************/
-// This is the complete and final version of the auction route.
-// It has been rewritten to work with the new "embedded pools" data structure,
-// where pools and teams are stored inside the Tournament model.
-
 import { Router } from "express";
-import Tournament from "../models/Tournament.js"; // Import Tournament, which contains pools
+import Tournament from "../models/Tournament.js";
 import Player from "../models/Player.js";
 import { auth } from "../middleware/auth.js";
 import { updateAndBroadcastState } from "../socket.js";
@@ -26,18 +19,6 @@ const formatCurrency = (amount) => {
   if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`;
   if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)} L`;
   return `₹${amount.toLocaleString()}`;
-};
-const getNextPlayer = async (io, tournamentId) => {
-  const currentState = io.auctionState.get(tournamentId);
-  if (!currentState || !currentState.currentPool) return null;
-  const tournament = await Tournament.findById(tournamentId).populate(
-    "pools.players"
-  );
-  const currentPool = tournament.pools.find(
-    (p) => p.name === currentState.currentPool
-  );
-  if (!currentPool) return null;
-  return currentPool.players.find((p) => p.status === "Available");
 };
 // --- End of Helper Functions ---
 
@@ -70,7 +51,7 @@ r.post("/start-pool", auth, async (req, res) => {
       ],
     });
     return res
-      .status(404)
+      .status(400)
       .json({ error: `No available players in pool: ${pool.name}` });
   }
 
@@ -94,17 +75,21 @@ r.post("/start-pool", auth, async (req, res) => {
 r.post("/sell", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
-  // ... existing code ...
+  const { tournamentId, playerId, teamId, price } = req.body;
   const io = req.app.get("io");
 
   try {
-    const tournament = await Tournament.findById(tournamentId).populate(
-      "teams.players"
-    );
+    // 1. Fetch all necessary data with full population
+    const tournament = await Tournament.findById(tournamentId).populate([
+      { path: "teams", populate: { path: "players", model: "Player" } },
+      { path: "pools.players", model: "Player" },
+    ]);
     const player = await Player.findById(playerId);
 
+    // 2. Perform all validations
     if (!tournament || !player)
       return res.status(404).json({ error: "Tournament or Player not found" });
+
     const team = tournament.teams.id(teamId);
     if (!team)
       return res
@@ -115,15 +100,12 @@ r.post("/sell", auth, async (req, res) => {
     if (priceAmount > team.purseRemaining)
       return res.status(400).json({ error: "Team does not have enough purse" });
 
-    // --- START OF THE FIX ---
-    // 1. Check if the squad is already full
     if (team.players.length >= tournament.maxSquadSize) {
       return res.status(400).json({
         error: `${team.name} squad is full (${tournament.maxSquadSize} players).`,
       });
     }
 
-    // 2. Check if adding this player exceeds the overseas limit
     if (player.nationality === "Overseas") {
       const overseasCount = team.players.filter(
         (p) => p.nationality === "Overseas"
@@ -135,54 +117,68 @@ r.post("/sell", auth, async (req, res) => {
       }
     }
 
-    player.soldPrice = priceAmount;
-    player.soldTo = team._id;
-    player.status = "Sold";
-    await player.save();
-    team.purseRemaining -= priceAmount;
-    team.players.push(player._id);
-    await tournament.save();
-
-    const updatedTournament = await Tournament.findById(tournamentId).populate(
-      "teams.players"
-    );
-    io.to(tournamentId).emit("squad_update", updatedTournament.teams);
-
+    // 3. Determine the next state BEFORE database writes
     const currentState = io.auctionState.get(tournamentId);
-    const nextPlayer = await getNextPlayer(io, tournamentId);
+    const currentPool = tournament.pools.find(
+      (p) => p.name === currentState.currentPool
+    );
+    let nextPlayer = null;
+    let upcomingPlayers = [];
+    if (currentPool) {
+      const remainingPlayers = currentPool.players.filter(
+        (p) => p._id.toString() !== playerId && p.status === "Available"
+      );
+      if (remainingPlayers.length > 0) {
+        nextPlayer = remainingPlayers[0];
+        upcomingPlayers = remainingPlayers.slice(1, 6);
+      }
+    }
+
+    // 4. Update all documents in memory
+    player.status = "Sold";
+    player.soldPrice = priceAmount;
+    player.soldTo = teamId;
+
+    team.purseRemaining -= priceAmount;
+    team.players.push(player._id); // Push only the ID
+
     let logMessage = `${player.name} sold to ${team.name} for ${formatCurrency(
       priceAmount
     )}.`;
 
-    if (!nextPlayer) {
-      logMessage += ` Pool "${currentState.currentPool}" is finished.`;
-      const currentPool = tournament.pools.find(
-        (p) => p.name === currentState.currentPool
-      );
-      if (currentPool) {
-        currentPool.isCompleted = true;
-        await tournament.save();
+    if (!nextPlayer && currentPool) {
+      logMessage += ` Pool "${currentPool.name}" is finished.`;
+      const poolToUpdate = tournament.pools.id(currentPool._id);
+      if (poolToUpdate) {
+        poolToUpdate.isCompleted = true;
       }
-    } else {
+    } else if (nextPlayer) {
       logMessage += ` Next up: ${nextPlayer.name}`;
     }
+
+    // 5. Save all changes to the database atomically
+    await Promise.all([player.save(), tournament.save()]);
+
+    // 6. Broadcast updates to clients
+    const updatedTournamentForBroadcast = await Tournament.findById(
+      tournamentId
+    ).populate("teams.players");
+    io.to(tournamentId).emit(
+      "squad_update",
+      updatedTournamentForBroadcast.teams
+    );
 
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
       currentBid: nextPlayer ? nextPlayer.basePrice : 0,
-      upcomingPlayers: (
-        await Tournament.findById(tournamentId).populate("pools.players")
-      ).pools
-        .find((p) => p.name === currentState.currentPool)
-        .players.filter((p) => p.status === "Available")
-        .slice(1, 6),
+      upcomingPlayers: upcomingPlayers,
       log: [...(currentState.log || []), logMessage],
     });
 
     res.json({ ok: true });
   } catch (e) {
-    console.error("Error in /sell:", e);
-    res.status(500).json({ error: "Server error during sell operation" });
+    console.error("Error in /sell route:", e);
+    res.status(500).json({ error: "Server error during sell operation." });
   }
 });
 
@@ -193,7 +189,9 @@ r.post("/unsold", auth, async (req, res) => {
   const { tournamentId, playerId } = req.body;
   const io = req.app.get("io");
   try {
-    const tournament = await Tournament.findById(tournamentId);
+    const tournament = await Tournament.findById(tournamentId).populate(
+      "pools.players"
+    );
     const player = await Player.findById(playerId);
     if (!player || !tournament)
       return res.status(404).json({ error: "Player or Tournament not found" });
@@ -208,31 +206,38 @@ r.post("/unsold", auth, async (req, res) => {
       type: "error",
     });
 
-    const nextPlayer = await getNextPlayer(io, tournamentId);
+    const currentPool = tournament.pools.find(
+      (p) => p.name === currentState.currentPool
+    );
+    let nextPlayer = null;
+    let upcomingPlayers = [];
+    if (currentPool) {
+      const remainingPlayers = currentPool.players.filter(
+        (p) => p._id.toString() !== playerId && p.status === "Available"
+      );
+      if (remainingPlayers.length > 0) {
+        nextPlayer = remainingPlayers[0];
+        upcomingPlayers = remainingPlayers.slice(1, 6);
+      }
+    }
+
     let logMessage = `${notificationMessage}`;
 
-    if (!nextPlayer) {
-      logMessage += ` Pool "${currentState.currentPool}" has finished.`;
-      const currentPool = tournament.pools.find(
-        (p) => p.name === currentState.currentPool
-      );
-      if (currentPool) {
-        currentPool.isCompleted = true;
+    if (!nextPlayer && currentPool) {
+      logMessage += ` Pool "${currentPool.name}" has finished.`;
+      const poolToUpdate = tournament.pools.id(currentPool._id);
+      if (poolToUpdate) {
+        poolToUpdate.isCompleted = true;
         await tournament.save();
       }
-    } else {
+    } else if (nextPlayer) {
       logMessage += ` Next up: ${nextPlayer.name}`;
     }
 
     updateAndBroadcastState(io, tournamentId, {
       currentPlayer: nextPlayer,
       currentBid: nextPlayer ? nextPlayer.basePrice : 0,
-      upcomingPlayers: (
-        await Tournament.findById(tournamentId).populate("pools.players")
-      ).pools
-        .find((p) => p.name === currentState.currentPool)
-        .players.filter((p) => p.status === "Available")
-        .slice(1, 6),
+      upcomingPlayers: upcomingPlayers,
       log: [...(currentState.log || []), logMessage],
     });
 
