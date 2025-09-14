@@ -50,21 +50,28 @@ export const api = {
       }),
     seedAdmin: (email, password, name) =>
       req("/api/auth/seed-admin", "POST", { email, password, name }),
-    // --- THIS IS THE CORRECT FUNCTION ---
     me: () => req("/api/auth/me/team"),
     meAdmin: () => req("/api/auth/me/admin"),
   },
   tournaments: {
+    getPublicTournamentByCode: (code) =>
+      req(`/api/tournaments/public/code/${code}`),
+    getPublicAnalytics: (tournamentId) =>
+      req(`/api/tournaments/public/analytics/${tournamentId}`),
     create: (payload) => req("/api/tournaments", "POST", payload),
     my: () => req("/api/tournaments/my"),
     getById: (id) => req("/api/tournaments/" + id),
     getTeams: (tournamentId) => req(`/api/tournaments/${tournamentId}/teams`),
     createTeam: (tournamentId, teamData) =>
       req(`/api/tournaments/${tournamentId}/teams`, "POST", teamData),
+    updateTeam: (tournamentId, teamId, teamData) =>
+      req(`/api/tournaments/${tournamentId}/teams/${teamId}`, "PUT", teamData),
     deleteTeam: (tournamentId, teamId) =>
       req(`/api/tournaments/${tournamentId}/teams/${teamId}`, "DELETE"),
     delete: (tournamentId) => req(`/api/tournaments/${tournamentId}`, "DELETE"),
     listPools: (tournamentId) => req(`/api/tournaments/${tournamentId}/pools`),
+    getPublicPools: (tournamentId) =>
+      req(`/api/tournaments/public/${tournamentId}/pools`),
     createPool: (tournamentId, poolData) =>
       req(`/api/tournaments/${tournamentId}/pools`, "POST", poolData),
     updatePool: (tournamentId, poolId, poolData) =>

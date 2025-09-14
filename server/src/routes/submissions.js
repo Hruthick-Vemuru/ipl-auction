@@ -70,9 +70,14 @@ r.get("/analytics/:tournamentId", auth, async (req, res) => {
   }
   try {
     const { tournamentId } = req.params;
-    const tournament = await Tournament.findById(tournamentId).populate(
-      "teams.players"
-    );
+    // --- FIX: Using a more explicit populate for nested documents ---
+    const tournament = await Tournament.findById(tournamentId).populate({
+      path: "teams",
+      populate: {
+        path: "players",
+        model: "Player",
+      },
+    });
     if (!tournament)
       return res.status(404).json({ error: "Tournament not found" });
 
@@ -81,6 +86,29 @@ r.get("/analytics/:tournamentId", auth, async (req, res) => {
   } catch (e) {
     console.error("Error fetching analytics data:", e);
     res.status(500).json({ error: "An unexpected server error occurred." });
+  }
+});
+
+// Admin gets all submissions for a tournament
+r.get("/tournament/:tournamentId", auth, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
+  try {
+    const { tournamentId } = req.params;
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+    const teamIds = tournament.teams.map((t) => t._id);
+    const submissions = await Submission.find({ team: { $in: teamIds } })
+      .populate("squad")
+      .populate("playingXI")
+      .populate("captain")
+      .populate("viceCaptain");
+    res.json(submissions);
+  } catch (e) {
+    console.error("Error fetching submissions for tournament:", e);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

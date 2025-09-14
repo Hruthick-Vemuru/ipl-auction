@@ -149,4 +149,39 @@ r.get(
   }
 );
 
+// --- THIS IS THE NEW, SECURE IMPERSONATION ROUTE ---
+r.post("/impersonate", auth, async (req, res) => {
+  // 1. First, ensure the person asking is an admin
+  if (req.user.role !== "admin")
+    return res.status(403).json({ error: "Forbidden" });
+
+  try {
+    const { tournamentId, teamId } = req.body;
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament)
+      return res.status(404).json({ error: "Tournament not found" });
+
+    // 2. Security Check: Ensure the admin owns the tournament this team belongs to
+    if (String(tournament.admin) !== String(req.user.id)) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to view this team." });
+    }
+
+    const team = tournament.teams.id(teamId);
+    if (!team) return res.status(404).json({ error: "Team not found" });
+
+    // 3. If all checks pass, generate a standard team token for them
+    const token = jwt.sign(
+      { role: "team", teamId: team._id, tournamentId: tournament._id },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    ); // Shorter expiry for safety
+    res.json({ token });
+  } catch (e) {
+    console.error("Error in /impersonate:", e);
+    res.status(500).json({ error: "An unexpected server error occurred." });
+  }
+});
+
 export default r;

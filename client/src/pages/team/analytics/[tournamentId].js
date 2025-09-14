@@ -176,8 +176,9 @@ export default function AnalyticsPage() {
   }, [tournamentId, router, refreshAnalytics]);
 
   const { myTeamAnalytics, allTeamStats, leagueTopBuys } = useMemo(() => {
-    if (!tournamentData || !myTeam)
+    if (!tournamentData || !myTeam || !tournamentData.teams) {
       return { myTeamAnalytics: null, allTeamStats: [], leagueTopBuys: {} };
+    }
 
     let allPlayers = [];
     const allStats = tournamentData.teams.map((team) => {

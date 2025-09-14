@@ -92,19 +92,26 @@ export default function AdminDashboard() {
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
   const [admin, setAdmin] = useState(null);
-  const [squadSize, setSquadSize] = useState(18);
+  const [minSquadSize, setMinSquadSize] = useState(15);
+  const [maxSquadSize, setMaxSquadSize] = useState(18);
   const [overseasLimit, setOverseasLimit] = useState(6);
-  const [teamData, setTeamData] = useState({
+
+  // --- NEW: State for editing a team ---
+  const [editingTeam, setEditingTeam] = useState(null);
+
+  const initialTeamState = {
     name: "",
     username: "",
     password: "",
     purse: { value: 100, unit: "Crores" },
     colorPrimary: "#0A2342",
     colorAccent: "#FFD700",
-  });
+  };
+
+  const [teamData, setTeamData] = useState(initialTeamState);
 
   const handleLogout = useCallback(() => {
-    setToken(null); // This clears the token from localStorage
+    setToken(null);
     router.push("/");
   }, [router]);
 
@@ -113,16 +120,7 @@ export default function AdminDashboard() {
     if (!token) {
       router.push("/admin/login");
     } else {
-      // Fetch the admin's own data when the page loads
-      api.auth
-        .meAdmin()
-        .then(setAdmin)
-        .catch((err) => {
-          console.error("Failed to fetch admin data:", err);
-          // If the token is invalid, log the user out
-          setToken(null);
-          router.push("/admin/login");
-        });
+      api.auth.meAdmin().then(setAdmin).catch(handleLogout);
       refreshTournaments();
     }
   }, [router]);
@@ -152,10 +150,10 @@ export default function AdminDashboard() {
         type: "error",
       });
     try {
-      // --- UPDATED API CALL ---
       await api.tournaments.create({
         title,
-        maxSquadSize: squadSize,
+        minSquadSize,
+        maxSquadSize,
         maxOverseasPlayers: overseasLimit,
       });
       setTitle("");
@@ -170,40 +168,59 @@ export default function AdminDashboard() {
         type: "error",
       });
     }
-  }, [title, squadSize, overseasLimit, refreshTournaments]);
+  }, [title, minSquadSize, maxSquadSize, overseasLimit, refreshTournaments]);
 
-  const createTeam = useCallback(async () => {
+  // --- RENAMED & UPDATED: Handles both Create and Update ---
+  const handleTeamSubmit = useCallback(async () => {
     if (!selTournament)
       return setNotification({
         message: "Please select a tournament first",
         type: "error",
       });
-    if (!teamData.name || !teamData.username || !teamData.password) {
+    if (!teamData.name || !teamData.username) {
       return setNotification({
-        message: "All team fields are required",
+        message: "Team Name and Username are required",
         type: "error",
       });
     }
-    try {
-      await api.tournaments.createTeam(selTournament._id, teamData);
-      setNotification({
-        message: "Team created successfully!",
-        type: "success",
+    // Password is only required when creating a new team
+    if (!editingTeam && !teamData.password) {
+      return setNotification({
+        message: "Password is required for new teams",
+        type: "error",
       });
-      setTeamData((prev) => ({
-        ...prev,
-        name: "",
-        username: "",
-        password: "",
-      }));
+    }
+
+    try {
+      if (editingTeam) {
+        // Update existing team
+        await api.tournaments.updateTeam(
+          selTournament._id,
+          editingTeam._id,
+          teamData
+        );
+        setNotification({
+          message: "Team updated successfully!",
+          type: "success",
+        });
+      } else {
+        // Create new team
+        await api.tournaments.createTeam(selTournament._id, teamData);
+        setNotification({
+          message: "Team created successfully!",
+          type: "success",
+        });
+      }
+      setTeamData(initialTeamState);
+      setEditingTeam(null);
       await refreshTournaments();
     } catch (e) {
       setNotification({
-        message: "Error creating team: " + e.message,
+        message: `Error: ${e.message}`,
         type: "error",
       });
     }
-  }, [selTournament, teamData, refreshTournaments]);
+  }, [selTournament, teamData, editingTeam, refreshTournaments]);
 
   const handleDeleteRequest = useCallback(
     (type, item) => {
@@ -260,6 +277,38 @@ export default function AdminDashboard() {
     },
     [refreshTournaments]
   );
+
+  // --- NEW: Handlers for Edit and Impersonate ---
+  const handleEditTeam = useCallback((team) => {
+    setEditingTeam(team);
+    const purseInCrores = team.purseRemaining / 10000000;
+    setTeamData({
+      name: team.name,
+      username: team.username,
+      password: "", // Leave password blank for editing
+      purse: { value: purseInCrores, unit: "Crores" },
+      colorPrimary: team.colorPrimary,
+      colorAccent: team.colorAccent,
+    });
+  }, []);
+
+  const handleCancelEdit = () => {
+    setEditingTeam(null);
+    setTeamData(initialTeamState);
+  };
+
+  const handleImpersonateTeam = (team) => {
+    // This is a placeholder for a more complex feature.
+    // To implement fully:
+    // 1. Create a backend route for admins to get a temporary team token.
+    // 2. Call that route here, get the token.
+    // 3. Save the token with setToken(tempToken).
+    // 4. router.push('/team');
+    setNotification({
+      message: `Impersonate feature not yet built. Would log in as ${team.name}.`,
+      type: "success",
+    });
+  };
 
   const handleTeamFormChange = (e) =>
     setTeamData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -342,26 +391,37 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-400">
-                    Max Squad Size
+                    Min Squad Size
                   </label>
                   <input
                     type="number"
-                    value={squadSize}
-                    onChange={(e) => setSquadSize(Number(e.target.value))}
+                    value={minSquadSize}
+                    onChange={(e) => setMinSquadSize(Number(e.target.value))}
                     className="w-full p-2 bg-gray-700 rounded-md"
                   />
                 </div>
                 <div>
                   <label className="text-sm text-gray-400">
-                    Max Overseas Players
+                    Max Squad Size
                   </label>
                   <input
                     type="number"
-                    value={overseasLimit}
-                    onChange={(e) => setOverseasLimit(Number(e.target.value))}
+                    value={maxSquadSize}
+                    onChange={(e) => setMaxSquadSize(Number(e.target.value))}
                     className="w-full p-2 bg-gray-700 rounded-md"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400">
+                  Max Overseas Players
+                </label>
+                <input
+                  type="number"
+                  value={overseasLimit}
+                  onChange={(e) => setOverseasLimit(Number(e.target.value))}
+                  className="w-full p-2 bg-gray-700 rounded-md"
+                />
               </div>
               <button
                 onClick={createTournament}
@@ -429,7 +489,9 @@ export default function AdminDashboard() {
           </div>
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
             <h2 className="text-2xl font-semibold mb-4 text-gray-200">
-              {selTournament
+              {editingTeam
+                ? `Editing "${editingTeam.name}"`
+                : selTournament
                 ? `Manage Teams for "${selTournament.title}"`
                 : "Select a Tournament"}
             </h2>
@@ -441,22 +503,24 @@ export default function AdminDashboard() {
                     name="name"
                     value={teamData.name}
                     onChange={handleTeamFormChange}
-                    className="p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    className="p-2 bg-gray-700 border border-gray-600 rounded-md"
                   />
                   <input
                     placeholder="Team Username"
                     name="username"
                     value={teamData.username}
                     onChange={handleTeamFormChange}
-                    className="p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    className="p-2 bg-gray-700 border border-gray-600 rounded-md"
                   />
                   <input
-                    placeholder="Team Password"
+                    placeholder={
+                      editingTeam ? "New Password (optional)" : "Team Password"
+                    }
                     name="password"
                     type="password"
                     value={teamData.password}
                     onChange={handleTeamFormChange}
-                    className="p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    className="p-2 bg-gray-700 border border-gray-600 rounded-md"
                   />
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">
@@ -469,63 +533,53 @@ export default function AdminDashboard() {
                       onUnitChange={handlePurseUnitChange}
                     />
                   </div>
-
-                  <div className="sm:col-span-2 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">
-                          Primary Color (Gradient Start)
-                        </label>
-                        <input
-                          type="color"
-                          name="colorPrimary"
-                          value={teamData.colorPrimary}
-                          onChange={handleTeamFormChange}
-                          className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md cursor-pointer"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">
-                          Accent Color (Gradient End)
-                        </label>
-                        <input
-                          type="color"
-                          name="colorAccent"
-                          value={teamData.colorAccent}
-                          onChange={handleTeamFormChange}
-                          className="w-full h-10 p-1 bg-gray-700 border border-gray-600 rounded-md cursor-pointer"
-                        />
-                      </div>
+                  <div className="sm:col-span-2 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Primary Color
+                      </label>
+                      <input
+                        type="color"
+                        name="colorPrimary"
+                        value={teamData.colorPrimary}
+                        onChange={handleTeamFormChange}
+                        className="w-full h-10 p-1 bg-gray-700 rounded-md"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
-                        Live Gradient Preview
+                        Accent Color
                       </label>
-                      <div
-                        className="w-full h-20 rounded-lg flex items-center justify-center border border-gray-600"
-                        style={{
-                          backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${teamData.colorPrimary}, ${teamData.colorAccent})`,
-                        }}
-                      >
-                        <span
-                          className="font-bold text-2xl tracking-wider"
-                          style={{
-                            color: teamData.colorAccent,
-                            textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
-                          }}
-                        >
-                          Team Preview
-                        </span>
-                      </div>
+                      <input
+                        type="color"
+                        name="colorAccent"
+                        value={teamData.colorAccent}
+                        onChange={handleTeamFormChange}
+                        className="w-full h-10 p-1 bg-gray-700 rounded-md"
+                      />
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={createTeam}
-                  className="w-full py-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
-                >
-                  Create Team
-                </button>
+                <div className="flex gap-4">
+                  {editingTeam && (
+                    <button
+                      onClick={handleCancelEdit}
+                      className="w-full py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    onClick={handleTeamSubmit}
+                    className={`w-full py-2 ${
+                      editingTeam
+                        ? "bg-yellow-600 hover:bg-yellow-700"
+                        : "bg-green-600 hover:bg-green-700"
+                    } rounded-md font-semibold`}
+                  >
+                    {editingTeam ? "Update Team" : "Create Team"}
+                  </button>
+                </div>
                 <hr className="my-6 border-gray-600" />
                 <h3 className="text-xl font-semibold mb-2 text-gray-300">
                   Created Teams
@@ -534,7 +588,7 @@ export default function AdminDashboard() {
                   {selTournament.teams?.map((team) => (
                     <div
                       key={team._id}
-                      className="flex items-center justify-between bg-gray-700 p-2 rounded-md"
+                      className="flex items-center justify-between bg-gray-700 p-2 rounded-md group"
                     >
                       <div className="flex items-center">
                         <div
@@ -546,23 +600,64 @@ export default function AdminDashboard() {
                         ></div>
                         <span className="font-medium">{team.name}</span>
                       </div>
-                      <button
-                        onClick={() => handleDeleteRequest("team", team)}
-                        className="text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleImpersonateTeam(team)}
+                          className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Impersonate Team"
                         >
-                          <path
-                            fillRule="evenodd"
-                            d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path
+                              fillRule="evenodd"
+                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.27 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleEditTeam(team)}
+                          className="text-gray-400 hover:text-yellow-400 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Edit Team"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                            <path
+                              fillRule="evenodd"
+                              d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRequest("team", team)}
+                          className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete Team"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {selTournament.teams?.length === 0 && (

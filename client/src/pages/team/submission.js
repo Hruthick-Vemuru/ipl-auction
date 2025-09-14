@@ -4,7 +4,7 @@ import Link from "next/link";
 import { api, getToken } from "../../lib/api";
 import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
 
-// --- NEW: Validation Logic (replicated from backend's validate.js) ---
+// --- NEW: Dynamic Validation Logic ---
 const countRoles = (players) => {
   return players.reduce((acc, p) => {
     acc[p.role] = (acc[p.role] || 0) + 1;
@@ -12,11 +12,12 @@ const countRoles = (players) => {
   }, {});
 };
 
-const validateSquad = (players) => {
+const validateSquad = (players, min, max) => {
   const roles = countRoles(players);
   const overseas = players.filter((p) => p.nationality === "Overseas").length;
-  if (players.length !== 15) return "Squad must be exactly 15 players";
-  if (overseas > 6) return "Max 6 overseas players allowed in Squad of 15";
+  if (players.length < min || players.length > max)
+    return `Squad must be between ${min} and ${max} players`;
+  if (overseas > 6) return "Max 6 overseas players allowed in Squad";
   if ((roles.Bowler || 0) < 3) return "At least 3 bowlers required in Squad";
   if ((roles.Wicketkeeper || 0) < 1)
     return "At least 1 wicketkeeper required in Squad";
@@ -144,6 +145,7 @@ const PlayerCard = memo(function PlayerCard({
 export default function TeamSubmissionPage() {
   const router = useRouter();
   const [myTeam, setMyTeam] = useState(null);
+  const [tournament, setTournament] = useState(null);
   const [submission, setSubmission] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [squad, setSquad] = useState([]);
@@ -160,7 +162,7 @@ export default function TeamSubmissionPage() {
     } else {
       api.auth
         .me()
-        .then((teamData) => {
+        .then(async (teamData) => {
           setMyTeam(teamData);
           if (teamData.submission) {
             setSubmission(teamData.submission);
@@ -169,6 +171,8 @@ export default function TeamSubmissionPage() {
             setCaptain(teamData.submission.captain || null);
             setViceCaptain(teamData.submission.viceCaptain || null);
           }
+          const tourney = await api.tournaments.getById(teamData.tournament);
+          setTournament(tourney);
         })
         .catch(() => router.push("/team/login"))
         .finally(() => setIsLoading(false));
@@ -193,16 +197,18 @@ export default function TeamSubmissionPage() {
 
   const moveToSquad = useCallback(
     (player) => {
-      if (squad.length < 15) {
+      if (squad.length < (tournament?.maxSquadSize || 18)) {
         setSquad((prev) => [...prev, player]);
       } else {
         setNotification({
-          message: "Squad is full (15 players max).",
+          message: `Squad is full (${
+            tournament?.maxSquadSize || 18
+          } players max).`,
           type: "error",
         });
       }
     },
-    [squad]
+    [squad, tournament]
   );
 
   const moveFromSquad = useCallback(
@@ -255,7 +261,11 @@ export default function TeamSubmissionPage() {
   );
 
   const handleSubmit = useCallback(async () => {
-    const squadError = validateSquad(squad);
+    const squadError = validateSquad(
+      squad,
+      tournament.minSquadSize,
+      tournament.maxSquadSize
+    );
     if (squadError) {
       return setNotification({
         message: `Squad Invalid: ${squadError}`,
@@ -297,9 +307,9 @@ export default function TeamSubmissionPage() {
     } catch (e) {
       setNotification({ message: `Error: ${e.message}`, type: "error" });
     }
-  }, [squad, playingXI, captain, viceCaptain]);
+  }, [squad, playingXI, captain, viceCaptain, tournament]);
 
-  if (isLoading || !myTeam) {
+  if (isLoading || !myTeam || !tournament) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         Loading...
@@ -397,10 +407,11 @@ export default function TeamSubmissionPage() {
                 className="text-2xl font-semibold mb-4"
                 style={{ color: myTeam.colorAccent }}
               >
-                Final Squad ({squad.length}/15)
+                Final Squad ({squad.length}/{tournament.maxSquadSize})
               </h2>
               <p className="text-sm text-gray-400 mb-4">
-                Click player to move to Playing XI.
+                Click player to move to Playing XI. Min players:{" "}
+                {tournament.minSquadSize}
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-64 overflow-y-auto pr-2">
                 {squadWithoutXI.map((p) => (

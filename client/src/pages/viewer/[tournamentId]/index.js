@@ -1,35 +1,11 @@
-import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken, setToken } from "../../lib/api";
+import { api } from "@/lib/api";
 import { io } from "socket.io-client";
-import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
-// --- Reusable Notification Component ---
-const Notification = memo(function Notification({ message, type, onClose }) {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [onClose, message, type]);
-  const baseClasses =
-    "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 transition-opacity duration-300";
-  const typeClasses = type === "success" ? "bg-green-600" : "bg-red-600";
-  return (
-    <div className={`${baseClasses} ${typeClasses}`}>
-      {message}
-      <button
-        onClick={onClose}
-        className="ml-4 font-bold opacity-70 hover:opacity-100"
-      >
-        X
-      </button>
-    </div>
-  );
-});
-
-// --- "Who Wants to Be a Millionaire?" Style Hexagonal PlayerCard ---
+// Re-usable PlayerCard component
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
   return (
     <div
@@ -70,30 +46,21 @@ const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
   );
 });
 
-// --- Main TeamDashboard Component ---
-export default function TeamDashboard() {
+// Main Viewer Dashboard Component
+export default function ViewerDashboard() {
   const router = useRouter();
-  const [myTeam, setMyTeam] = useState(null);
-  const [allTeams, setAllTeams] = useState([]);
+  const { tournamentId } = router.query;
+  const [tournamentData, setTournamentData] = useState(null);
   const [auctionState, setAuctionState] = useState(null);
   const [pools, setPools] = useState([]);
-  const [activeTab, setActiveTab] = useState(null);
+  const [activeTab, setActiveTab] = useState("auction_room");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [notification, setNotification] = useState(null);
 
-  // --- THIS IS THE CORRECT LOCATION FOR THE LOGOUT HANDLER ---
-  const handleLogout = useCallback(() => {
-    setToken(null);
-    router.push("/");
-  }, [router]);
+  // Default theme for the viewer mode
+  const VIEWER_THEME = { primary: "#111827", accent: "#D4AF37" }; // Black & Gold
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.push("/team/login");
-      return;
-    }
+    if (!tournamentId) return;
 
     const socket = io(
       process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000"
@@ -101,28 +68,15 @@ export default function TeamDashboard() {
 
     const fetchData = async () => {
       try {
-        const myTeamData = await api.auth.me();
-        if (!myTeamData || !myTeamData.tournament) {
-          throw new Error(
-            "Your team data is incomplete. Please contact the administrator."
-          );
-        }
-        setMyTeam(myTeamData);
-        setActiveTab(myTeamData._id);
-
-        const tournamentId = myTeamData.tournament;
-
-        const [allTeamsData, poolsData] = await Promise.all([
-          api.tournaments.getTeams(tournamentId),
-          api.tournaments.listPools(tournamentId),
+        const [data, poolsData] = await Promise.all([
+          api.tournaments.getPublicAnalytics(tournamentId),
+          api.tournaments.getPublicPools(tournamentId),
         ]);
-        setAllTeams(allTeamsData);
+        setTournamentData(data);
         setPools(poolsData);
-
         socket.emit("join_tournament", tournamentId);
       } catch (e) {
         console.error("Error fetching dashboard data:", e);
-        setError(e.message);
       } finally {
         setIsLoading(false);
       }
@@ -132,81 +86,39 @@ export default function TeamDashboard() {
 
     socket.on("connect", () => console.log("Connected to socket server!"));
     socket.on("auction_state_update", (state) => setAuctionState(state));
-
     socket.on("squad_update", (updatedTeams) => {
-      setAllTeams(updatedTeams);
-      setMyTeam((currentMyTeam) => {
-        if (!currentMyTeam) return null;
-        const myUpdatedTeam = updatedTeams.find(
-          (t) => t._id === currentMyTeam._id
-        );
-        return myUpdatedTeam || currentMyTeam;
-      });
+      setTournamentData((prev) => ({ ...prev, teams: updatedTeams }));
     });
-
-    socket.on("pools_update", (updatedPools) => {
-      setPools(updatedPools);
-    });
-
-    socket.on("auction_notification", (data) => {
-      setNotification(data);
-    });
+    socket.on("pools_update", (updatedPools) => setPools(updatedPools));
 
     return () => socket.disconnect();
-  }, [router]);
+  }, [tournamentId]);
 
   const activeViewData = useMemo(() => {
-    if (!myTeam || !activeTab)
+    if (!tournamentData) {
       return {
-        theme: { primary: "#000", accent: "#FFF" },
-        header: { name: "Loading...", purse: 0, accent: "#FFF" },
-        isMyTeamView: true,
-      };
-
-    const viewedTeam = allTeams.find((t) => t._id === activeTab);
-
-    if (activeTab === "auction_room" || !viewedTeam) {
-      return {
-        theme: { primary: myTeam.colorPrimary, accent: myTeam.colorAccent },
+        theme: VIEWER_THEME,
         header: {
-          name: myTeam.name,
-          purse: myTeam.purseRemaining,
-          accent: myTeam.colorAccent,
+          name: "Loading Tournament...",
+          accent: VIEWER_THEME.accent,
+          purse: null,
         },
-        isMyTeamView: true,
       };
     }
 
-    return {
-      theme: {
-        primary: viewedTeam.colorPrimary,
-        accent: viewedTeam.colorAccent,
-      },
-      header: {
-        name: viewedTeam.name,
-        purse: viewedTeam.purseRemaining,
-        accent: viewedTeam.colorAccent,
-      },
-      isMyTeamView: viewedTeam._id === myTeam._id,
-    };
-  }, [activeTab, allTeams, myTeam]);
+    const viewedTeam = tournamentData.teams.find((t) => t._id === activeTab);
 
-  const displayedTeamData = useMemo(() => {
-    if (activeTab === "auction_room" || !allTeams.length) return null;
-    const teamToShow = allTeams.find((t) => t._id === activeTab);
-    if (!teamToShow || !teamToShow.players)
-      return { team: teamToShow, groupedPlayers: {} };
-    const grouped = teamToShow.players.reduce(
-      (acc, player) => {
-        const role = player.role + "s";
-        if (!acc[role]) acc[role] = [];
-        acc[role].push(player);
-        return acc;
-      },
-      { Batters: [], Bowlers: [], Allrounders: [], Wicketkeepers: [] }
-    );
-    return { team: teamToShow, groupedPlayers: grouped };
-  }, [activeTab, allTeams]);
+    // Use default theme for auction room, or team theme for team tabs
+    const primaryColor = viewedTeam?.colorPrimary || VIEWER_THEME.primary;
+    const accentColor = viewedTeam?.colorAccent || VIEWER_THEME.accent;
+    const headerName = viewedTeam?.name || tournamentData.title;
+    const purse = viewedTeam ? viewedTeam.purseRemaining : null;
+
+    return {
+      theme: { primary: primaryColor, accent: accentColor },
+      header: { name: headerName, accent: accentColor, purse: purse },
+    };
+  }, [activeTab, tournamentData]);
 
   const renderContent = () => {
     if (activeTab === "auction_room") {
@@ -240,7 +152,7 @@ export default function TeamDashboard() {
                 <h3 className="text-2xl font-bold text-blue-400 mb-4">
                   Upcoming Players
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                   {auctionState.upcomingPlayers?.map((p) => (
                     <div
                       key={p._id}
@@ -283,13 +195,18 @@ export default function TeamDashboard() {
       );
     }
 
-    if (!displayedTeamData)
-      return (
-        <div className="text-center text-gray-500 py-10">
-          Select a team to view their squad.
-        </div>
-      );
-    const { team, groupedPlayers } = displayedTeamData;
+    const teamToShow = tournamentData.teams.find((t) => t._id === activeTab);
+    if (!teamToShow) return null;
+
+    const groupedPlayers = teamToShow.players.reduce(
+      (acc, player) => {
+        const role = player.role + "s";
+        if (!acc[role]) acc[role] = [];
+        acc[role].push(player);
+        return acc;
+      },
+      { Batters: [], Bowlers: [], Allrounders: [], Wicketkeepers: [] }
+    );
 
     return (
       <div className="space-y-10 bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
@@ -299,7 +216,7 @@ export default function TeamDashboard() {
               <div key={role}>
                 <h3
                   className="text-3xl font-bold mb-6 text-center tracking-wider"
-                  style={{ color: team.colorAccent }}
+                  style={{ color: teamToShow.colorAccent }}
                 >
                   {role}
                 </h3>
@@ -308,14 +225,14 @@ export default function TeamDashboard() {
                     <PlayerCard
                       key={p._id}
                       player={p}
-                      accentColor={team.colorAccent}
+                      accentColor={teamToShow.colorAccent}
                     />
                   ))}
                 </div>
               </div>
             )
         )}
-        {team.players.length === 0 && (
+        {teamToShow.players.length === 0 && (
           <p className="text-center text-gray-400 py-10">
             This team has no players yet.
           </p>
@@ -327,25 +244,7 @@ export default function TeamDashboard() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        Loading...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-red-900 text-white flex flex-col items-center justify-center p-4">
-        <h2 className="text-3xl font-bold mb-4">An Error Occurred</h2>
-        <p className="text-red-200 bg-red-800 p-4 rounded-md">{error}</p>
-        <p className="mt-4 text-red-300">Please try logging in again.</p>
-      </div>
-    );
-  }
-
-  if (!myTeam) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        Initializing...
+        Loading Tournament...
       </div>
     );
   }
@@ -354,18 +253,11 @@ export default function TeamDashboard() {
     <div
       className="min-h-screen p-4 md:p-8 text-white transition-all duration-500"
       style={{
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${activeViewData.theme.primary}, ${activeViewData.theme.accent})`,
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), linear-gradient(45deg, ${activeViewData.theme.primary}, ${activeViewData.theme.accent})`,
         backgroundSize: "cover",
         backgroundAttachment: "fixed",
       }}
     >
-      {notification && (
-        <Notification
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification(null)}
-        />
-      )}
       <div className="max-w-7xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
@@ -375,33 +267,23 @@ export default function TeamDashboard() {
             >
               {activeViewData.header.name}
             </h1>
-            <p className="text-white text-opacity-80 text-lg">
-              Purse Remaining: {formatCurrency(activeViewData.header.purse)}
-            </p>
+            {activeViewData.header.purse !== null ? (
+              <p className="text-white text-opacity-80 text-lg">
+                Purse Remaining: {formatCurrency(activeViewData.header.purse)}
+              </p>
+            ) : (
+              <p className="text-lg text-gray-300">Public Viewer Mode</p>
+            )}
           </div>
           <div className="flex items-center gap-4 mt-4 md:mt-0">
-            {myTeam.tournament && (
-              <Link
-                href={`/team/analytics/${myTeam.tournament}`}
-                className="px-4 py-2 rounded-lg font-semibold bg-blue-600/80 hover:bg-blue-600 transition-colors"
-              >
-                View Analytics
-              </Link>
-            )}
-            {activeViewData.isMyTeamView && (
-              <Link
-                href="/team/submission"
-                className="px-4 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
-                style={{
-                  borderColor: activeViewData.header.accent,
-                  color: activeViewData.header.accent,
-                }}
-              >
-                Squad Submission
-              </Link>
-            )}
-            <button
-              onClick={handleLogout}
+            <Link
+              href={`/viewer/${tournamentId}/analytics`}
+              className="px-4 py-2 rounded-lg font-semibold bg-blue-600/80 hover:bg-blue-600 transition-colors"
+            >
+              View Analytics
+            </Link>
+            <Link
+              href="/viewer"
               className="flex items-center gap-2 px-4 py-2 bg-red-600/70 hover:bg-red-600 rounded-md font-semibold transition-colors"
             >
               <svg
@@ -417,7 +299,7 @@ export default function TeamDashboard() {
                 />
               </svg>
               Logout
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -432,7 +314,7 @@ export default function TeamDashboard() {
           >
             Auction Room
           </button>
-          {allTeams.map((t) => (
+          {tournamentData?.teams.map((t) => (
             <button
               key={t._id}
               onClick={() => setActiveTab(t._id)}
@@ -442,7 +324,7 @@ export default function TeamDashboard() {
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              {t._id === myTeam?._id ? "My Squad" : t.name}
+              {t.name}
             </button>
           ))}
         </div>

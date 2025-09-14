@@ -94,11 +94,13 @@ r.post("/start-pool", auth, async (req, res) => {
 r.post("/sell", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
-  const { tournamentId, playerId, teamId, price } = req.body;
+  // ... existing code ...
   const io = req.app.get("io");
 
   try {
-    const tournament = await Tournament.findById(tournamentId);
+    const tournament = await Tournament.findById(tournamentId).populate(
+      "teams.players"
+    );
     const player = await Player.findById(playerId);
 
     if (!tournament || !player)
@@ -112,6 +114,26 @@ r.post("/sell", auth, async (req, res) => {
     const priceAmount = parseCurrency(price);
     if (priceAmount > team.purseRemaining)
       return res.status(400).json({ error: "Team does not have enough purse" });
+
+    // --- START OF THE FIX ---
+    // 1. Check if the squad is already full
+    if (team.players.length >= tournament.maxSquadSize) {
+      return res.status(400).json({
+        error: `${team.name} squad is full (${tournament.maxSquadSize} players).`,
+      });
+    }
+
+    // 2. Check if adding this player exceeds the overseas limit
+    if (player.nationality === "Overseas") {
+      const overseasCount = team.players.filter(
+        (p) => p.nationality === "Overseas"
+      ).length;
+      if (overseasCount >= tournament.maxOverseasPlayers) {
+        return res.status(400).json({
+          error: `${team.name} has reached the overseas player limit (${tournament.maxOverseasPlayers}).`,
+        });
+      }
+    }
 
     player.soldPrice = priceAmount;
     player.soldTo = team._id;

@@ -41,6 +41,12 @@ export default function ChooseRole() {
           >
             I'm a Team Owner
           </Link>
+          <Link
+            href="/viewer"
+            className="w-full text-center py-3 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-lg font-semibold transition-transform transform hover:scale-105"
+          >
+            I'm a Viewer
+          </Link>
         </div>
       </div>
     </div>
