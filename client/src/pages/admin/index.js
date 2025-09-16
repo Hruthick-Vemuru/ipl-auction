@@ -112,9 +112,39 @@ export default function AdminDashboard() {
   });
 
   const handleLogout = useCallback(() => {
+    // Also clear impersonation token on logout
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("originalAdminToken");
+    }
     setToken(null);
     router.push("/");
   }, [router]);
+
+  // --- Impersonation Handler ---
+  const handleImpersonate = useCallback(
+    async (teamId) => {
+      try {
+        const adminToken = getToken();
+        if (!adminToken) throw new Error("Admin token not found");
+
+        // Save the original admin token before switching
+        if (typeof window !== "undefined") {
+          localStorage.setItem("originalAdminToken", adminToken);
+        }
+
+        const res = await api.auth.impersonateTeam(teamId);
+        setToken(res.token); // Set the new team token
+        router.push("/team"); // Redirect to the team dashboard
+      } catch (e) {
+        setNotification({ message: e.message, type: "error" });
+        // Clean up if impersonation fails
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("originalAdminToken");
+        }
+      }
+    },
+    [router]
+  );
 
   useEffect(() => {
     const token = getToken();
@@ -127,6 +157,7 @@ export default function AdminDashboard() {
         .catch(() => router.push("/admin/login"));
       refreshTournaments();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const refreshTournaments = useCallback(async () => {
@@ -310,7 +341,6 @@ export default function AdminDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {/* The settings link has been removed */}
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-2 bg-red-600/80 hover:bg-red-600 rounded-md font-semibold transition-colors"
@@ -510,6 +540,30 @@ export default function AdminDashboard() {
                         />
                       </div>
                     </div>
+
+                    {/* === INSERTED: Live Gradient Preview from preview file === */}
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">
+                        Live Gradient Preview
+                      </label>
+                      <div
+                        className="w-full h-20 rounded-lg flex items-center justify-center border border-gray-600"
+                        style={{
+                          backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${teamData.colorPrimary}, ${teamData.colorAccent})`,
+                        }}
+                      >
+                        <span
+                          className="font-bold text-2xl tracking-wider"
+                          style={{
+                            color: teamData.colorAccent,
+                            textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
+                          }}
+                        >
+                          Team Preview
+                        </span>
+                      </div>
+                    </div>
+                    {/* === End inserted preview === */}
                   </div>
                 </div>
                 <div className="flex gap-4">
@@ -550,7 +604,8 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          title="Impersonate (Coming Soon)"
+                          onClick={() => handleImpersonate(team._id)}
+                          title="Impersonate Team"
                           className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <svg
@@ -559,9 +614,10 @@ export default function AdminDashboard() {
                             viewBox="0 0 20 20"
                             fill="currentColor"
                           >
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                             <path
                               fillRule="evenodd"
-                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 17a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
                               clipRule="evenodd"
                             />
                           </svg>

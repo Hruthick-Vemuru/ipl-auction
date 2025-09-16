@@ -129,7 +129,23 @@ const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
     e.preventDefault();
     setMsg("");
     try {
-      await api.players.create(player);
+      // --- THIS IS THE FIX for the string-to-number error ---
+      const parseCurrency = (amount) => {
+        if (!amount || typeof amount.value === "undefined" || !amount.unit)
+          return 0;
+        const value = parseFloat(amount.value);
+        if (isNaN(value)) return 0;
+        if (amount.unit === "Lakhs") return value * 100000;
+        if (amount.unit === "Crores") return value * 10000000;
+        return value;
+      };
+
+      const payload = {
+        ...player,
+        basePrice: parseCurrency(player.basePrice),
+      };
+
+      await api.players.create(payload);
       setMsg(`Successfully added ${player.name}`);
       onPlayerAdded();
       setPlayer({
@@ -302,7 +318,7 @@ const PoolManager = memo(function PoolManager({
 
   useEffect(() => {
     refreshData();
-  }, [tournamentId, refreshTrigger]);
+  }, [tournamentId, refreshTrigger, refreshData]);
 
   const handleCreatePool = useCallback(async () => {
     if (!newPoolName) return;
@@ -315,17 +331,55 @@ const PoolManager = memo(function PoolManager({
     setSelectedPoolId(newPool._id);
   }, [newPoolName, tournamentId, pools.length, refreshData]);
 
+  // --- THIS IS THE FIX for the player duplication bug ---
   const movePlayer = useCallback(
     async (playerId, fromPoolId, toPoolId) => {
       setIsMoving(true);
-      const sourcePool = fromPoolId
-        ? pools.find((p) => p._id === fromPoolId)
-        : null;
-      const targetPool = toPoolId
-        ? pools.find((p) => p._id === toPoolId)
-        : null;
+
+      const originalPools = JSON.parse(JSON.stringify(pools));
+      const originalUnassigned = [...unassignedPlayers];
+
+      // Optimistic UI Update
+      if (fromPoolId === null) {
+        // Moving from Unassigned to a Pool
+        const playerToMove = unassignedPlayers.find((p) => p._id === playerId);
+        if (playerToMove) {
+          setUnassignedPlayers((prev) =>
+            prev.filter((p) => p._id !== playerId)
+          );
+          setPools((prev) =>
+            prev.map((p) =>
+              p._id === toPoolId
+                ? { ...p, players: [...p.players, playerToMove] }
+                : p
+            )
+          );
+        }
+      } else {
+        // Moving from a Pool to Unassigned
+        const sourcePool = pools.find((p) => p._id === fromPoolId);
+        const playerToMove = sourcePool.players.find((p) => p._id === playerId);
+        if (playerToMove) {
+          setPools((prev) =>
+            prev.map((p) =>
+              p._id === fromPoolId
+                ? {
+                    ...p,
+                    players: p.players.filter(
+                      (player) => player._id !== playerId
+                    ),
+                  }
+                : p
+            )
+          );
+          setUnassignedPlayers((prev) => [...prev, playerToMove]);
+        }
+      }
+
+      // API Calls
       try {
-        if (sourcePool) {
+        if (fromPoolId) {
+          const sourcePool = originalPools.find((p) => p._id === fromPoolId);
           const updatedSourcePlayers = sourcePool.players
             .filter((p) => p._id !== playerId)
             .map((p) => p._id);
@@ -333,7 +387,8 @@ const PoolManager = memo(function PoolManager({
             players: updatedSourcePlayers,
           });
         }
-        if (targetPool) {
+        if (toPoolId) {
+          const targetPool = originalPools.find((p) => p._id === toPoolId);
           const updatedTargetPlayers = [
             ...targetPool.players.map((p) => p._id),
             playerId,
@@ -342,15 +397,16 @@ const PoolManager = memo(function PoolManager({
             players: updatedTargetPlayers,
           });
         }
-        await refreshData();
+        await refreshData(); // Refresh from server to ensure sync
       } catch (error) {
         console.error("Failed to move player:", error);
-        await refreshData();
+        setPools(originalPools);
+        setUnassignedPlayers(originalUnassigned);
       } finally {
         setIsMoving(false);
       }
     },
-    [pools, refreshData, tournamentId]
+    [pools, unassignedPlayers, tournamentId, refreshData]
   );
 
   const handleDeletePlayerRequest = useCallback(

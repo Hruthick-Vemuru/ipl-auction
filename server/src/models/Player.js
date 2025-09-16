@@ -2,12 +2,6 @@ import mongoose from "mongoose";
 
 const playerSchema = new mongoose.Schema(
   {
-    // --- THIS IS THE NEW, CRITICAL FIELD ---
-    admin: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
     name: { type: String, required: true },
     role: {
       type: String,
@@ -15,16 +9,25 @@ const playerSchema = new mongoose.Schema(
       required: true,
     },
     nationality: { type: String, enum: ["Indian", "Overseas"], required: true },
-    basePrice: { type: Number, default: 0 },
-    soldPrice: { type: Number, default: 0 },
-    soldTo: { type: mongoose.Schema.Types.ObjectId, default: null }, // Note: This ref would ideally point to the sub-document, but for simplicity we leave it as is.
+    basePrice: { type: Number, required: true },
     status: {
       type: String,
       enum: ["Available", "Sold", "Unsold"],
       default: "Available",
     },
+    soldPrice: { type: Number, default: 0 },
+    soldTo: { type: mongoose.Schema.Types.ObjectId }, // Correctly has no ref
+    admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
   },
   { timestamps: true }
 );
+
+// --- THIS IS THE FIX ---
+// This compound index ensures player names are unique PER ADMIN, not globally.
+playerSchema.index({ name: 1, admin: 1 }, { unique: true });
 
 export default mongoose.model("Player", playerSchema);

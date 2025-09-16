@@ -5,7 +5,7 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import Tournament from "../models/Tournament.js";
-import Submission from "../models/Submission.js"; // <-- THE MISSING IMPORT IS NOW ADDED
+import Submission from "../models/Submission.js";
 import {
   JWT_SECRET,
   CLIENT_URL,
@@ -27,7 +27,7 @@ if (EMAIL_HOST && EMAIL_PORT && EMAIL_USER && EMAIL_PASS) {
   transporter = nodemailer.createTransport({
     host: EMAIL_HOST,
     port: EMAIL_PORT,
-    secure: EMAIL_PORT == 465,
+    secure: EMAIL_PORT == 465, // true for 465, false for other ports
     auth: {
       user: EMAIL_USER,
       pass: EMAIL_PASS,
@@ -57,7 +57,7 @@ r.post("/register/send-otp", async (req, res) => {
   }
 
   const otp = crypto.randomInt(100000, 999999).toString();
-  const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+  const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
   const passwordHash = await bcrypt.hash(password, 10);
 
   await User.findOneAndUpdate(
@@ -91,6 +91,7 @@ r.post("/register/send-otp", async (req, res) => {
         });
     }
   } else {
+    // Fallback if SMTP is not configured in .env
     console.log("-----------------------------------------");
     console.log("SMTP NOT CONFIGURED. OTP for " + email + ": " + otp);
     console.log("-----------------------------------------");
@@ -254,6 +255,41 @@ r.get("/me/admin", auth, async (req, res) => {
   } catch (e) {
     console.error("Error fetching admin 'me':", e);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// --- Admin Impersonate Team Route ---
+r.post("/impersonate/:teamId", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  try {
+    const { teamId } = req.params;
+    // Find any tournament that contains this teamId
+    const tournament = await Tournament.findOne({ "teams._id": teamId });
+    if (!tournament) {
+      return res
+        .status(404)
+        .json({ error: "Team not found in any tournament." });
+    }
+
+    // Security check: ensure the admin owns the tournament the team is in
+    if (String(tournament.admin) !== String(req.user.id)) {
+      return res
+        .status(403)
+        .json({ error: "You do not own the tournament this team belongs to." });
+    }
+
+    // Create a temporary, short-lived token for the team
+    const teamToken = jwt.sign(
+      { role: "team", teamId: teamId, tournamentId: tournament._id },
+      JWT_SECRET,
+      { expiresIn: "1h" } // Impersonation token is valid for 1 hour
+    );
+    res.json({ token: teamToken });
+  } catch (e) {
+    console.error("Impersonation error:", e);
+    res.status(500).json({ error: "Server error during impersonation." });
   }
 });
 

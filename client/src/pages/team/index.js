@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken, setToken } from "../../lib/api";
+import { api, getToken, setToken } from "@/lib/api";
 import { io } from "socket.io-client";
-import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
+import { formatCurrency, getTextColorForBackground } from "@/lib/utils";
 
 // --- Reusable Notification Component ---
 const Notification = memo(function Notification({ message, type, onClose }) {
@@ -29,7 +29,7 @@ const Notification = memo(function Notification({ message, type, onClose }) {
   );
 });
 
-// --- "Who Wants to Be a Millionaire?" Style Hexagonal PlayerCard ---
+// --- Reusable PlayerCard Component ---
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
   return (
     <div
@@ -81,14 +81,32 @@ export default function TeamDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [isImpersonating, setIsImpersonating] = useState(false);
 
-  // --- THIS IS THE CORRECT LOCATION FOR THE LOGOUT HANDLER ---
   const handleLogout = useCallback(() => {
     setToken(null);
     router.push("/");
   }, [router]);
 
+  const handleStopImpersonating = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const adminToken = localStorage.getItem("originalAdminToken");
+      if (adminToken) {
+        setToken(adminToken); // Restore the admin token
+        localStorage.removeItem("originalAdminToken"); // Clean up
+        router.push("/admin"); // Go back to the admin dashboard
+      }
+    }
+  }, [router]);
+
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const adminToken = localStorage.getItem("originalAdminToken");
+      if (adminToken) {
+        setIsImpersonating(true);
+      }
+    }
+
     const token = getToken();
     if (!token) {
       router.push("/team/login");
@@ -388,36 +406,59 @@ export default function TeamDashboard() {
                 View Analytics
               </Link>
             )}
-            {activeViewData.isMyTeamView && (
-              <Link
-                href="/team/submission"
-                className="px-4 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
-                style={{
-                  borderColor: activeViewData.header.accent,
-                  color: activeViewData.header.accent,
-                }}
+            {isImpersonating ? (
+              <button
+                onClick={handleStopImpersonating}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-black rounded-md font-semibold transition-colors hover:bg-yellow-400"
               >
-                Squad Submission
-              </Link>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Return to Admin
+              </button>
+            ) : (
+              <>
+                {activeViewData.isMyTeamView && (
+                  <Link
+                    href="/team/submission"
+                    className="px-4 py-2 rounded-lg font-semibold transition-transform transform hover:scale-105 border-2"
+                    style={{
+                      borderColor: activeViewData.header.accent,
+                      color: activeViewData.header.accent,
+                    }}
+                  >
+                    Squad Submission
+                  </Link>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600/70 hover:bg-red-600 rounded-md font-semibold transition-colors"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Logout
+                </button>
+              </>
             )}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600/70 hover:bg-red-600 rounded-md font-semibold transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Logout
-            </button>
           </div>
         </header>
 
