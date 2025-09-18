@@ -1,18 +1,16 @@
 /********************************************************************************
- * --- FILE: client/src/pages/admin/auction/[tournamentId].js (FINAL) ---
+ * --- FILE: client/src/pages/admin/auction/[tournamentId].js (DEFINITIVE FIX) ---
  ********************************************************************************/
-// This is the complete and final code for the Admin's Auction Control Panel.
-// It includes the dynamic Pool Manager, player/pool deletion, performance optimizations,
-// the live bidding controls, and all styling fixes for forms.
+// This version fixes the "Objects are not valid as a React child" crash by
+// correctly processing the player's nationality and role from the API.
 
-import React, { useState, useEffect, useCallback, memo, useRef } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken } from "../../../lib/api";
-import { io } from "socket.io-client";
 import { formatCurrency } from "../../../lib/utils";
 
-// --- Reusable Notification Component ---
+// --- Reusable Components (Notification, ConfirmationModal, etc.) ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,7 +34,6 @@ const Notification = memo(function Notification({ message, type, onClose }) {
   );
 });
 
-// --- Reusable Confirmation Modal Component ---
 const ConfirmationModal = memo(function ConfirmationModal({
   message,
   onConfirm,
@@ -65,7 +62,6 @@ const ConfirmationModal = memo(function ConfirmationModal({
   );
 });
 
-// --- Reworked Currency Input Component ---
 const CurrencyInput = memo(function CurrencyInput({
   value,
   unit,
@@ -94,134 +90,197 @@ const CurrencyInput = memo(function CurrencyInput({
   );
 });
 
-// --- AddPlayerForm Component ---
-const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
-  const [player, setPlayer] = useState({
-    name: "",
-    role: "Batter",
-    nationality: "Indian",
-    basePrice: { value: 20, unit: "Lakhs" },
-  });
-  const [msg, setMsg] = useState("");
+const SearchablePlayerInput = ({ onPlayerSelected }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleChange = useCallback(
-    (e) => setPlayer((prev) => ({ ...prev, [e.target.name]: e.target.value })),
-    []
+  useEffect(() => {
+    if (searchTerm.length < 3) {
+      setResults([]);
+      return;
+    }
+    const handler = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const data = await api.cricData.searchPlayers(searchTerm);
+        setResults(data);
+      } catch (error) {
+        console.error("Failed to search players:", error);
+        setResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  const handleSelect = (player) => {
+    onPlayerSelected(player);
+    setSearchTerm("");
+    setResults([]);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="Search for a player by LAST NAME..."
+        className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      {isLoading && (
+        <p className="text-sm text-gray-400 absolute mt-1">Searching...</p>
+      )}
+      {results.length > 0 && (
+        <ul className="absolute z-10 w-full bg-gray-800 border border-gray-600 rounded-md mt-1 max-h-60 overflow-y-auto">
+          {results.map((player) => (
+            <li
+              key={player.id}
+              onClick={() => handleSelect(player)}
+              className="p-2 hover:bg-gray-700 cursor-pointer"
+            >
+              {player.fullname}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
-  const handleBasePriceValueChange = useCallback(
-    (e) =>
-      setPlayer((prev) => ({
-        ...prev,
-        basePrice: { ...prev.basePrice, value: e.target.value },
-      })),
-    []
-  );
-  const handleBasePriceUnitChange = useCallback(
-    (e) =>
-      setPlayer((prev) => ({
-        ...prev,
-        basePrice: { ...prev.basePrice, unit: e.target.value },
-      })),
-    []
-  );
+};
+
+const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
+  const [player, setPlayer] = useState(null);
+  const [basePrice, setBasePrice] = useState({ value: 20, unit: "Lakhs" });
+  const [msg, setMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getRole = (apiRoleName) => {
+    if (!apiRoleName) return "Batter";
+    const role = apiRoleName.toLowerCase();
+    if (role.includes("wicketkeeper")) return "Wicketkeeper";
+    if (role.includes("bowler")) return "Bowler";
+    if (role.includes("allrounder")) return "Allrounder";
+    return "Batter";
+  };
+
+  const handlePlayerSelected = async (selectedPlayer) => {
+    try {
+      setMsg("");
+      const details = await api.cricData.getPlayerDetails(selectedPlayer.id);
+
+      // --- THIS IS THE FIX ---
+      // We now correctly process the 'position' object and 'country' object
+      // into simple strings before setting the state.
+      const role = getRole(details.position?.name);
+      const nationality =
+        details.country?.name === "India"
+          ? "Indian"
+          : details.country?.name || "Overseas";
+
+      setPlayer({
+        name: details.fullname,
+        role: role,
+        nationality: nationality,
+        image_path: details.image_path,
+        stats: details.stats || {},
+        battingstyle: details.battingstyle,
+      });
+    } catch (error) {
+      setMsg("Error fetching player details: " + error.message);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!player) {
+      setMsg("Please select a player first.");
+      return;
+    }
+    setIsSubmitting(true);
     setMsg("");
     try {
-      // --- THIS IS THE FIX for the string-to-number error ---
       const parseCurrency = (amount) => {
-        if (!amount || typeof amount.value === "undefined" || !amount.unit)
-          return 0;
         const value = parseFloat(amount.value);
         if (isNaN(value)) return 0;
-        if (amount.unit === "Lakhs") return value * 100000;
-        if (amount.unit === "Crores") return value * 10000000;
-        return value;
+        return amount.unit === "Lakhs" ? value * 100000 : value * 10000000;
       };
-
-      const payload = {
-        ...player,
-        basePrice: parseCurrency(player.basePrice),
-      };
-
+      const payload = { ...player, basePrice: parseCurrency(basePrice) };
       await api.players.create(payload);
       setMsg(`Successfully added ${player.name}`);
       onPlayerAdded();
-      setPlayer({
-        name: "",
-        role: "Batter",
-        nationality: "Indian",
-        basePrice: { value: 20, unit: "Lakhs" },
-      });
+      setPlayer(null);
+      setBasePrice({ value: 20, unit: "Lakhs" });
     } catch (err) {
       setMsg("Error: " + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-gray-800 p-6 rounded-lg border border-gray-700"
-    >
+    <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
       <h3 className="text-xl font-semibold mb-4 text-gray-200">
-        Add New Player
+        Add New Player from Database
       </h3>
       {msg && (
         <p className="mb-2 text-sm text-center p-2 rounded-md bg-gray-700">
           {msg}
         </p>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <input
-          name="name"
-          value={player.name}
-          onChange={handleChange}
-          placeholder="Player Name"
-          required
-          className="p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-        />
-        <select
-          name="role"
-          value={player.role}
-          onChange={handleChange}
-          className="p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-        >
-          <option>Batter</option>
-          <option>Bowler</option>
-          <option>Allrounder</option>
-          <option>Wicketkeeper</option>
-        </select>
-        <select
-          name="nationality"
-          value={player.nationality}
-          onChange={handleChange}
-          className="p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-        >
-          <option>Indian</option>
-          <option>Overseas</option>
-        </select>
-        <div className="lg:col-span-2">
-          <label className="block text-sm text-gray-400 mb-1">Base Price</label>
-          <CurrencyInput
-            value={player.basePrice.value}
-            unit={player.basePrice.unit}
-            onValueChange={handleBasePriceValueChange}
-            onUnitChange={handleBasePriceUnitChange}
-          />
-        </div>
-        <button
-          type="submit"
-          className="p-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
-        >
-          Add Player
-        </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SearchablePlayerInput onPlayerSelected={handlePlayerSelected} />
+        {player && (
+          <div className="md:col-span-2 bg-gray-900 p-4 rounded-md grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <img
+                src={player.image_path}
+                alt={player.name}
+                className="w-24 h-24 rounded-full mx-auto"
+              />
+              <p className="font-bold text-center mt-2">{player.name}</p>
+            </div>
+            <div>
+              <p>
+                <strong>Role:</strong> {player.role}
+              </p>
+              <p>
+                <strong>Nationality:</strong> {player.nationality}
+              </p>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Base Price
+                </label>
+                <CurrencyInput
+                  value={basePrice.value}
+                  unit={basePrice.unit}
+                  onValueChange={(e) =>
+                    setBasePrice((p) => ({ ...p, value: e.target.value }))
+                  }
+                  onUnitChange={(e) =>
+                    setBasePrice((p) => ({ ...p, unit: e.target.value }))
+                  }
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full p-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
+              >
+                {isSubmitting ? "Adding..." : "Add Player to Auction"}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
-    </form>
+    </div>
   );
 });
 
-// --- PlayerAssignmentList Component ---
+// --- PlayerAssignmentList and PoolManager components ---
 const PlayerAssignmentList = memo(function PlayerAssignmentList({
   title,
   players,
@@ -280,7 +339,6 @@ const PlayerAssignmentList = memo(function PlayerAssignmentList({
   );
 });
 
-// --- PoolManager Component ---
 const PoolManager = memo(function PoolManager({
   tournamentId,
   onPoolsUpdate,
@@ -331,82 +389,36 @@ const PoolManager = memo(function PoolManager({
     setSelectedPoolId(newPool._id);
   }, [newPoolName, tournamentId, pools.length, refreshData]);
 
-  // --- THIS IS THE FIX for the player duplication bug ---
   const movePlayer = useCallback(
     async (playerId, fromPoolId, toPoolId) => {
       setIsMoving(true);
-
-      const originalPools = JSON.parse(JSON.stringify(pools));
-      const originalUnassigned = [...unassignedPlayers];
-
-      // Optimistic UI Update
-      if (fromPoolId === null) {
-        // Moving from Unassigned to a Pool
-        const playerToMove = unassignedPlayers.find((p) => p._id === playerId);
-        if (playerToMove) {
-          setUnassignedPlayers((prev) =>
-            prev.filter((p) => p._id !== playerId)
-          );
-          setPools((prev) =>
-            prev.map((p) =>
-              p._id === toPoolId
-                ? { ...p, players: [...p.players, playerToMove] }
-                : p
-            )
-          );
-        }
-      } else {
-        // Moving from a Pool to Unassigned
-        const sourcePool = pools.find((p) => p._id === fromPoolId);
-        const playerToMove = sourcePool.players.find((p) => p._id === playerId);
-        if (playerToMove) {
-          setPools((prev) =>
-            prev.map((p) =>
-              p._id === fromPoolId
-                ? {
-                    ...p,
-                    players: p.players.filter(
-                      (player) => player._id !== playerId
-                    ),
-                  }
-                : p
-            )
-          );
-          setUnassignedPlayers((prev) => [...prev, playerToMove]);
-        }
-      }
-
-      // API Calls
       try {
-        if (fromPoolId) {
-          const sourcePool = originalPools.find((p) => p._id === fromPoolId);
-          const updatedSourcePlayers = sourcePool.players
-            .filter((p) => p._id !== playerId)
-            .map((p) => p._id);
-          await api.tournaments.updatePool(tournamentId, sourcePool._id, {
-            players: updatedSourcePlayers,
-          });
-        }
-        if (toPoolId) {
-          const targetPool = originalPools.find((p) => p._id === toPoolId);
+        if (fromPoolId === null) {
+          const targetPool = pools.find((p) => p._id === toPoolId);
           const updatedTargetPlayers = [
             ...targetPool.players.map((p) => p._id),
             playerId,
           ];
-          await api.tournaments.updatePool(tournamentId, targetPool._id, {
+          await api.tournaments.updatePool(tournamentId, toPoolId, {
             players: updatedTargetPlayers,
           });
+        } else {
+          const sourcePool = pools.find((p) => p._id === fromPoolId);
+          const updatedSourcePlayers = sourcePool.players
+            .filter((p) => p._id !== playerId)
+            .map((p) => p._id);
+          await api.tournaments.updatePool(tournamentId, fromPoolId, {
+            players: updatedSourcePlayers,
+          });
         }
-        await refreshData(); // Refresh from server to ensure sync
+        await refreshData();
       } catch (error) {
         console.error("Failed to move player:", error);
-        setPools(originalPools);
-        setUnassignedPlayers(originalUnassigned);
       } finally {
         setIsMoving(false);
       }
     },
-    [pools, unassignedPlayers, tournamentId, refreshData]
+    [pools, tournamentId, refreshData]
   );
 
   const handleDeletePlayerRequest = useCallback(
@@ -471,7 +483,6 @@ const PoolManager = memo(function PoolManager({
           Create Pool
         </button>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 bg-gray-900 p-4 rounded-md">
           <h3 className="font-semibold mb-2">Pools</h3>
@@ -541,28 +552,21 @@ const PoolManager = memo(function PoolManager({
   );
 });
 
-// --- Main AuctionControlPanel Component ---
-export default function AuctionControlPanel() {
+// --- Main AuctionControlRoom Component ---
+export default function AuctionControlRoom() {
   const router = useRouter();
   const { tournamentId } = router.query;
   const [tournament, setTournament] = useState(null);
-  const [auctionState, setAuctionState] = useState(null);
-  const [teams, setTeams] = useState([]);
-  const [pools, setPools] = useState([]);
   const [notification, setNotification] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
-  const [soldToTeamId, setSoldToTeamId] = useState("");
-  const [bidIncrement, setBidIncrement] = useState({
-    value: 50,
-    unit: "Lakhs",
-  });
-  const socketRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pools, setPools] = useState([]);
   const triggerRefresh = () => setRefreshKey((prevKey) => prevKey + 1);
 
   const handlePoolsUpdate = useCallback((newPools) => {
     setPools(newPools);
   }, []);
+
   const handleShowConfirm = useCallback((message, onConfirm) => {
     setConfirmModal({ message, onConfirm });
   }, []);
@@ -574,100 +578,8 @@ export default function AuctionControlPanel() {
       router.push("/admin/login");
       return;
     }
-
     api.tournaments.getById(tournamentId).then(setTournament);
-    api.tournaments.getTeams(tournamentId).then(setTeams);
-
-    socketRef.current = io(
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000"
-    );
-    socketRef.current.emit("join_tournament", tournamentId);
-    socketRef.current.on("auction_state_update", (state) =>
-      setAuctionState(state)
-    );
-    socketRef.current.on("squad_update", (updatedTeams) =>
-      setTeams(updatedTeams)
-    );
-
-    return () => socketRef.current.disconnect();
   }, [tournamentId, router]);
-
-  const handleBidUpdate = useCallback(
-    (direction) => {
-      if (!tournamentId || !auctionState?.currentPlayer) return;
-      const incrementValue =
-        (parseFloat(bidIncrement.value) || 0) *
-        (bidIncrement.unit === "Lakhs" ? 100000 : 10000000);
-      const newBid =
-        direction === "up"
-          ? auctionState.currentBid + incrementValue
-          : Math.max(
-              auctionState.currentPlayer.basePrice,
-              auctionState.currentBid - incrementValue
-            );
-      socketRef.current.emit("admin_update_bid", { tournamentId, newBid });
-    },
-    [tournamentId, auctionState, bidIncrement]
-  );
-
-  const startPool = useCallback(
-    async (poolId) => {
-      try {
-        await api.auction.startPool(tournamentId, poolId);
-        setNotification({
-          message: `Auction started for selected pool`,
-          type: "success",
-        });
-      } catch (e) {
-        setNotification({ message: "Error: " + e.message, type: "error" });
-      }
-    },
-    [tournamentId]
-  );
-
-  const handleSellPlayer = useCallback(
-    async (finalPrice) => {
-      const { currentPlayer } = auctionState;
-      if (!soldToTeamId || !finalPrice || !currentPlayer) return;
-      try {
-        const pricePayload = { value: finalPrice / 100000, unit: "Lakhs" };
-        if (finalPrice >= 10000000) {
-          pricePayload.value = finalPrice / 10000000;
-          pricePayload.unit = "Crores";
-        }
-        await api.auction.sellPlayer(
-          tournamentId,
-          currentPlayer._id,
-          soldToTeamId,
-          pricePayload
-        );
-        setNotification({
-          message: `${currentPlayer.name} sold successfully!`,
-          type: "success",
-        });
-        setSoldToTeamId("");
-        triggerRefresh();
-      } catch (e) {
-        setNotification({ message: "Error: " + e.message, type: "error" });
-      }
-    },
-    [auctionState, soldToTeamId, tournamentId]
-  );
-
-  const handleUnsoldPlayer = useCallback(async () => {
-    const { currentPlayer } = auctionState;
-    if (!currentPlayer) return;
-    try {
-      await api.auction.unsoldPlayer(tournamentId, currentPlayer._id);
-      setNotification({
-        message: `${currentPlayer.name} is unsold.`,
-        type: "success",
-      });
-      triggerRefresh();
-    } catch (e) {
-      setNotification({ message: "Error: " + e.message, type: "error" });
-    }
-  }, [auctionState, tournamentId]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-8">
@@ -690,12 +602,23 @@ export default function AuctionControlPanel() {
       )}
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-400">
-            Auction Control: {tournament?.title}
-          </h1>
-          <Link href="/admin" className="text-blue-400 hover:underline">
-            &larr; Back to Dashboard
-          </Link>
+          <div>
+            <h1 className="text-4xl font-bold text-blue-400">
+              Auction Control Room
+            </h1>
+            <p className="text-gray-400">{tournament?.title}</p>
+          </div>
+          <div>
+            <Link
+              href={`/admin/run-auction/${tournamentId}`}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-md font-semibold text-lg"
+            >
+              Go to Live Auction &rarr;
+            </Link>
+            <Link href="/admin" className="ml-4 text-blue-400 hover:underline">
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         <AddPlayerForm onPlayerAdded={triggerRefresh} />
@@ -707,138 +630,6 @@ export default function AuctionControlPanel() {
             onShowConfirm={handleShowConfirm}
             refreshTrigger={refreshKey}
           />
-        )}
-
-        <div className="mt-8 bg-gray-800 p-6 rounded-lg border border-gray-700">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-200">
-            Start Auction
-          </h2>
-          <div className="flex flex-wrap gap-4">
-            {pools.map((pool) => {
-              const hasAvailablePlayers = pool.players.some(
-                (p) => p.status === "Available"
-              );
-              return (
-                <button
-                  key={pool._id}
-                  onClick={() => startPool(pool._id)}
-                  disabled={pool.isCompleted || !hasAvailablePlayers}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-md font-semibold disabled:bg-gray-500 disabled:cursor-not-allowed"
-                >
-                  Start: {pool.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {auctionState?.currentPlayer && (
-          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-gray-800 p-6 rounded-lg border border-gray-700">
-              <h3 className="text-2xl font-bold text-yellow-400 mb-4">
-                Currently Bidding:{" "}
-                <span className="text-white">
-                  {auctionState.currentPlayer.name}
-                </span>
-              </h3>
-              <p className="text-lg text-gray-400">
-                {auctionState.currentPlayer.role} | Base Price:{" "}
-                {formatCurrency(auctionState.currentPlayer.basePrice)}
-              </p>
-
-              <div className="my-6 p-4 bg-black/30 rounded-lg text-center border border-gray-600">
-                <p className="text-5xl font-bold text-green-400 transition-colors duration-300">
-                  {formatCurrency(auctionState.currentBid)}
-                </p>
-                <div className="flex items-center justify-center gap-4 mt-4">
-                  <button
-                    onClick={() => handleBidUpdate("down")}
-                    className="px-6 py-2 bg-red-600 hover:bg-red-700 rounded-md font-bold text-2xl transition-transform transform active:scale-95"
-                  >
-                    -
-                  </button>
-                  <div className="w-48">
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      Increment
-                    </label>
-                    <CurrencyInput
-                      value={bidIncrement.value}
-                      unit={bidIncrement.unit}
-                      onValueChange={(e) =>
-                        setBidIncrement((prev) => ({
-                          ...prev,
-                          value: e.target.value,
-                        }))
-                      }
-                      onUnitChange={(e) =>
-                        setBidIncrement((prev) => ({
-                          ...prev,
-                          unit: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleBidUpdate("up")}
-                    className="px-6 py-2 bg-green-600 hover:bg-green-700 rounded-md font-bold text-2xl transition-transform transform active:scale-95"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <select
-                  value={soldToTeamId}
-                  onChange={(e) => setSoldToTeamId(e.target.value)}
-                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-                >
-                  <option value="">-- Winning Team --</option>
-                  {teams.map((t) => (
-                    <option key={t._id} value={t._id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  readOnly
-                  value={`Final Price: ${formatCurrency(
-                    auctionState.currentBid
-                  )}`}
-                  className="w-full p-2 bg-gray-900 border border-gray-700 rounded-md text-center"
-                />
-              </div>
-
-              <div className="mt-4 flex gap-4">
-                <button
-                  onClick={() => handleSellPlayer(auctionState.currentBid)}
-                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 rounded-md font-semibold"
-                >
-                  Mark as Sold
-                </button>
-                <button
-                  onClick={handleUnsoldPlayer}
-                  className="flex-1 py-3 bg-red-600 hover:bg-red-700 rounded-md font-semibold"
-                >
-                  Mark as Unsold
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-              <h3 className="text-xl font-bold text-blue-400 mb-4">
-                Upcoming in Pool
-              </h3>
-              <div className="space-y-2">
-                {auctionState.upcomingPlayers?.map((p) => (
-                  <div key={p._id} className="bg-gray-700 p-2 rounded text-sm">
-                    <span className="font-semibold">{p.name}</span> ({p.role})
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </div>

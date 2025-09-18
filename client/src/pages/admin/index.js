@@ -453,10 +453,16 @@ export default function AdminDashboard() {
                   </div>
                   <div className="mt-2 pt-2 border-t border-gray-600 flex gap-2">
                     <Link
-                      href={`/admin/auction/${t._id}`}
+                      href={`/admin/run-auction/${t._id}`}
                       className="flex-1 text-center px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded-md font-semibold"
                     >
                       Run Auction
+                    </Link>
+                    <Link
+                      href={`/admin/auction/${t._id}`}
+                      className="flex-1 text-center px-3 py-1 text-sm bg-gray-500 hover:bg-gray-600 rounded-md font-semibold"
+                    >
+                      Setup
                     </Link>
                     <Link
                       href={`/admin/submissions/${t._id}`}
@@ -541,7 +547,6 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* === INSERTED: Live Gradient Preview from preview file === */}
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">
                         Live Gradient Preview
@@ -563,7 +568,6 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                     </div>
-                    {/* === End inserted preview === */}
                   </div>
                 </div>
                 <div className="flex gap-4">

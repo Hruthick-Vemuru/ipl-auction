@@ -1,3 +1,10 @@
+/********************************************************************************
+ * --- FILE: server/src/routes/auction.js (DEFINITIVE FIX) ---
+ ********************************************************************************/
+// This version uses a robust helper function to explicitly fetch the full
+// player document from the database at every step, guaranteeing that all data
+// (image, stats, etc.) is broadcast to the auction screen.
+
 import { Router } from "express";
 import Tournament from "../models/Tournament.js";
 import Player from "../models/Player.js";
@@ -20,7 +27,36 @@ const formatCurrency = (amount) => {
   if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)} L`;
   return `₹${amount.toLocaleString()}`;
 };
-// --- End of Helper Functions ---
+
+// --- NEW ROBUST HELPER ---
+// This function gets the next available player from a pool and ensures the FULL document is returned.
+async function getNextAuctionPlayer(tournamentId, poolName) {
+  const tournament = await Tournament.findById(tournamentId).populate(
+    "pools.players"
+  );
+  if (!tournament) return { nextPlayer: null, upcomingPlayers: [] };
+
+  const pool = tournament.pools.find((p) => p.name === poolName);
+  if (!pool) return { nextPlayer: null, upcomingPlayers: [] };
+
+  const remainingPlayers = pool.players.filter((p) => p.status === "Available");
+
+  if (remainingPlayers.length > 0) {
+    // Explicitly fetch the full document for the next player using its ID
+    const nextPlayerFull = await Player.findById(
+      remainingPlayers[0]._id
+    ).lean();
+    const upcomingPlayers = remainingPlayers.slice(1, 6);
+    return { nextPlayer: nextPlayerFull, upcomingPlayers };
+  } else {
+    // Mark pool as completed if no players are left
+    await Tournament.updateOne(
+      { _id: tournamentId, "pools._id": pool._id },
+      { $set: { "pools.$.isCompleted": true } }
+    );
+    return { nextPlayer: null, upcomingPlayers: [] };
+  }
+}
 
 // Admin starts the auction for a specific pool
 r.post("/start-pool", auth, async (req, res) => {
@@ -29,49 +65,36 @@ r.post("/start-pool", auth, async (req, res) => {
   const { tournamentId, poolId } = req.body;
   const io = req.app.get("io");
 
-  const tournament = await Tournament.findById(tournamentId).populate(
-    "pools.players"
-  );
+  const tournament = await Tournament.findById(tournamentId);
   if (!tournament)
     return res.status(404).json({ error: "Tournament not found" });
 
   const pool = tournament.pools.id(poolId);
   if (!pool) return res.status(404).json({ error: "Pool not found" });
 
-  const playersInPool = pool.players.filter((p) => p.status === "Available");
-  if (playersInPool.length === 0) {
-    pool.isCompleted = true;
-    await tournament.save();
-    updateAndBroadcastState(io, tournamentId, {
-      currentPool: pool.name,
-      currentPlayer: null,
-      log: [
-        ...(io.auctionState.get(tournamentId)?.log || []),
-        `Pool "${pool.name}" is already finished.`,
-      ],
-    });
+  const { nextPlayer, upcomingPlayers } = await getNextAuctionPlayer(
+    tournamentId,
+    pool.name
+  );
+
+  if (!nextPlayer) {
     return res
       .status(400)
       .json({ error: `No available players in pool: ${pool.name}` });
   }
 
-  const firstPlayer = playersInPool.shift();
-  const upcomingPlayers = playersInPool;
-
   updateAndBroadcastState(io, tournamentId, {
     currentPool: pool.name,
-    currentPlayer: firstPlayer,
-    currentBid: firstPlayer.basePrice,
-    upcomingPlayers: upcomingPlayers.slice(0, 5),
-    log: [
-      `Auction started for ${pool.name}. First player: ${firstPlayer.name}`,
-    ],
+    currentPlayer: nextPlayer,
+    currentBid: nextPlayer.basePrice,
+    upcomingPlayers: upcomingPlayers,
+    log: [`Auction started for ${pool.name}. First player: ${nextPlayer.name}`],
   });
 
   res.json({ ok: true, message: `Auction started for pool: ${pool.name}` });
 });
 
-// Admin sells a player to a team - REWRITTEN FOR STABILITY
+// Admin sells a player to a team
 r.post("/sell", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -83,32 +106,31 @@ r.post("/sell", auth, async (req, res) => {
       "teams.players"
     );
     const player = await Player.findById(playerId);
-
     if (!tournament || !player)
       return res.status(404).json({ error: "Tournament or Player not found" });
-
     const team = tournament.teams.id(teamId);
-    if (!team)
-      return res.status(404).json({ error: "Team not found in tournament" });
+    if (!team) return res.status(404).json({ error: "Team not found" });
 
     const priceAmount = parseCurrency(price);
-
-    // All validations
+    // Validations...
     if (priceAmount > team.purseRemaining)
       return res.status(400).json({ error: "Team does not have enough purse" });
     if (team.players.length >= tournament.maxSquadSize)
       return res.status(400).json({ error: `${team.name} squad is full.` });
-    if (player.nationality === "Overseas") {
+    if (player.nationality.toLowerCase() !== "indian") {
       const overseasCount = team.players.filter(
-        (p) => p.nationality === "Overseas"
+        (p) => p.nationality.toLowerCase() !== "indian"
       ).length;
-      if (overseasCount >= tournament.maxOverseasPlayers)
+      if (overseasCount >= tournament.maxOverseasPlayers) {
         return res
           .status(400)
-          .json({ error: `${team.name} has reached overseas player limit.` });
+          .json({
+            error: `${team.name} has reached the overseas player limit.`,
+          });
+      }
     }
 
-    // --- Perform Atomic Database Updates ---
+    // Database Updates
     await Player.findByIdAndUpdate(playerId, {
       status: "Sold",
       soldPrice: priceAmount,
@@ -122,31 +144,11 @@ r.post("/sell", auth, async (req, res) => {
       }
     );
 
-    // --- Determine Next State and Broadcast ---
     const currentState = io.auctionState.get(tournamentId);
-    const tournamentForNextPlayer = await Tournament.findById(
-      tournamentId
-    ).populate("pools.players");
-    const currentPool = tournamentForNextPlayer.pools.find(
-      (p) => p.name === currentState.currentPool
+    const { nextPlayer, upcomingPlayers } = await getNextAuctionPlayer(
+      tournamentId,
+      currentState.currentPool
     );
-
-    let nextPlayer = null;
-    let upcomingPlayers = [];
-    if (currentPool) {
-      const remainingPlayers = currentPool.players.filter(
-        (p) => p.status === "Available"
-      );
-      if (remainingPlayers.length > 0) {
-        nextPlayer = remainingPlayers[0];
-        upcomingPlayers = remainingPlayers.slice(1, 6);
-      } else {
-        await Tournament.updateOne(
-          { _id: tournamentId, "pools._id": currentPool._id },
-          { $set: { "pools.$.isCompleted": true } }
-        );
-      }
-    }
 
     const logMessage = `${player.name} sold to ${
       team.name
@@ -156,11 +158,10 @@ r.post("/sell", auth, async (req, res) => {
         : `Pool "${currentState.currentPool}" is finished.`
     }`;
 
-    // --- Broadcast all updates to clients ---
+    // Broadcast updates
     const updatedTournamentForBroadcast = await Tournament.findById(
       tournamentId
     ).populate("teams.players");
-
     io.to(tournamentId).emit(
       "squad_update",
       updatedTournamentForBroadcast.teams
@@ -169,8 +170,6 @@ r.post("/sell", auth, async (req, res) => {
       "pools_update",
       updatedTournamentForBroadcast.pools
     );
-
-    // --- THIS IS THE NOTIFICATION EMIT FOR SOLD PLAYERS ---
     io.to(tournamentId).emit("auction_notification", {
       message: `${player.name} sold to ${team.name} for ${formatCurrency(
         priceAmount
@@ -192,7 +191,7 @@ r.post("/sell", auth, async (req, res) => {
   }
 });
 
-// Admin marks a player as unsold - REWRITTEN FOR STABILITY
+// Admin marks a player as unsold
 r.post("/unsold", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ error: "Forbidden" });
@@ -202,34 +201,13 @@ r.post("/unsold", auth, async (req, res) => {
     const player = await Player.findById(playerId);
     if (!player) return res.status(404).json({ error: "Player not found" });
 
-    // --- Perform Atomic Database Update ---
     await Player.findByIdAndUpdate(playerId, { status: "Unsold" });
 
-    // --- Determine Next State and Broadcast ---
     const currentState = io.auctionState.get(tournamentId);
-    const tournamentForNextPlayer = await Tournament.findById(
-      tournamentId
-    ).populate("pools.players");
-    const currentPool = tournamentForNextPlayer.pools.find(
-      (p) => p.name === currentState.currentPool
+    const { nextPlayer, upcomingPlayers } = await getNextAuctionPlayer(
+      tournamentId,
+      currentState.currentPool
     );
-
-    let nextPlayer = null;
-    let upcomingPlayers = [];
-    if (currentPool) {
-      const remainingPlayers = currentPool.players.filter(
-        (p) => p.status === "Available"
-      );
-      if (remainingPlayers.length > 0) {
-        nextPlayer = remainingPlayers[0];
-        upcomingPlayers = remainingPlayers.slice(1, 6);
-      } else {
-        await Tournament.updateOne(
-          { _id: tournamentId, "pools._id": currentPool._id },
-          { $set: { "pools.$.isCompleted": true } }
-        );
-      }
-    }
 
     const logMessage = `${player.name} is unsold. ${
       nextPlayer
@@ -237,12 +215,10 @@ r.post("/unsold", auth, async (req, res) => {
         : `Pool "${currentState.currentPool}" has finished.`
     }`;
 
-    // --- THIS IS THE NOTIFICATION EMIT FOR UNSOLD PLAYERS ---
     io.to(tournamentId).emit("auction_notification", {
       message: `${player.name} is unsold.`,
       type: "error",
     });
-
     const updatedPoolsForBroadcast = await Tournament.findById(
       tournamentId
     ).populate("pools.players");

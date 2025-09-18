@@ -113,4 +113,8 @@ export const api = {
     getAnalytics: (tournamentId) =>
       req(`/api/submissions/analytics/${tournamentId}`),
   },
+  cricData: {
+    searchPlayers: (name) => req(`/api/cric-data/players/search/${name}`),
+    getPlayerDetails: (id) => req(`/api/cric-data/players/${id}`),
+  },
 };

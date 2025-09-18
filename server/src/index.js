@@ -9,7 +9,7 @@ import { PORT, MONGO_URI, ALLOW_ORIGIN, SESSION_SECRET } from "../config.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupSocket } from "./socket.js";
-
+import cricDataRoutes from "./routes/cric-data.js";
 import authRoutes from "./routes/auth.js";
 import tournamentRoutes from "./routes/tournaments.js";
 import playerRoutes from "./routes/players.js";
@@ -64,6 +64,7 @@ app.use("/api/tournaments", tournamentRoutes);
 app.use("/api/players", playerRoutes);
 app.use("/api/auction", auctionRoutes);
 app.use("/api/submissions", submissionRoutes);
+app.use("/api/cric-data", cricDataRoutes);
 
 // --- Database and Server Start ---
 mongoose

@@ -1,3 +1,6 @@
+/********************************************************************************
+ * --- FILE: server/src/models/Player.js (FINAL) ---
+ ********************************************************************************/
 import mongoose from "mongoose";
 
 const playerSchema = new mongoose.Schema(
@@ -8,7 +11,7 @@ const playerSchema = new mongoose.Schema(
       enum: ["Batter", "Bowler", "Allrounder", "Wicketkeeper"],
       required: true,
     },
-    nationality: { type: String, enum: ["Indian", "Overseas"], required: true },
+    nationality: { type: String, required: true },
     basePrice: { type: Number, required: true },
     status: {
       type: String,
@@ -16,18 +19,20 @@ const playerSchema = new mongoose.Schema(
       default: "Available",
     },
     soldPrice: { type: Number, default: 0 },
-    soldTo: { type: mongoose.Schema.Types.ObjectId }, // Correctly has no ref
+    soldTo: { type: mongoose.Schema.Types.ObjectId },
     admin: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+    image_path: { type: String },
+    battingstyle: { type: String },
+    // --- The stats field is essential for storing our aggregated data ---
+    stats: { type: mongoose.Schema.Types.Mixed },
   },
   { timestamps: true }
 );
 
-// --- THIS IS THE FIX ---
-// This compound index ensures player names are unique PER ADMIN, not globally.
 playerSchema.index({ name: 1, admin: 1 }, { unique: true });
 
 export default mongoose.model("Player", playerSchema);
