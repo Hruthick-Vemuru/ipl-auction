@@ -395,6 +395,75 @@ const AuctionSidebar = ({
   );
 };
 
+// --- Custom Team Select Dropdown ---
+const CustomTeamSelect = ({ teams, selectedTeamId, onSelect, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const selectedTeam = teams.find((t) => t._id === selectedTeamId);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex justify-between items-center"
+      >
+        <span>
+          {selectedTeam ? selectedTeam.name : "-- Select Winning Team --"}
+        </span>
+        <svg
+          className={`w-5 h-5 transition-transform ${
+            isOpen ? "transform rotate-180" : ""
+          }`}
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.ul
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-10 w-full mt-1 bg-black/80 backdrop-blur-lg border border-white/10 rounded-md shadow-lg max-h-60 overflow-y-auto"
+          >
+            {teams.map((team) => (
+              <li
+                key={team._id}
+                onClick={() => {
+                  onSelect(team._id);
+                  setIsOpen(false);
+                }}
+                className="p-3 hover:bg-blue-500/30 cursor-pointer"
+              >
+                {team.name}
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export default function LiveAuctionPage() {
   const router = useRouter();
   const { tournamentId } = router.query;
@@ -537,7 +606,7 @@ export default function LiveAuctionPage() {
   }
 
   return (
-    <div className="min-h-screen text-white flex overflow-hidden">
+    <div className="min-h-screen text-white flex flex-col overflow-hidden">
       <ThreeJSCanvas />
       <Notification
         message={notification?.message}
@@ -545,231 +614,233 @@ export default function LiveAuctionPage() {
         onClose={() => setNotification(null)}
       />
 
-      <main
-        className={`flex-grow p-4 md:p-8 transition-all duration-300 relative pb-32 ${
-          isSidebarOpen ? "mr-80" : ""
-        }`}
-      >
-        <div className="max-w-7xl mx-auto">
-          <header className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-                {tournament?.title}
-              </h1>
-              <p className="text-gray-400">Live Auction Control Room</p>
-            </div>
-            <Link
-              href={`/admin/auction/${tournamentId}`}
-              className="text-blue-400 hover:underline"
-            >
-              &larr; Back to Setup
-            </Link>
-          </header>
-
-          <AnimatePresence mode="wait">
-            {auctionState?.currentPlayer ? (
-              <motion.div
-                key={auctionState.currentPlayer._id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-                className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+      <div className="flex-grow flex">
+        <main
+          className={`flex-grow p-4 md:p-8 transition-all duration-300 relative ${
+            isSidebarOpen ? "mr-80" : ""
+          }`}
+        >
+          <div className="max-w-7xl mx-auto">
+            <header className="flex justify-between items-center mb-8">
+              <div>
+                <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                  {tournament?.title}
+                </h1>
+                <p className="text-gray-400">Live Auction Control Room</p>
+              </div>
+              <Link
+                href={`/admin/auction/${tournamentId}`}
+                className="text-blue-400 hover:underline"
               >
-                <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
-                    <div className="flex flex-col md:flex-row items-center gap-6">
-                      <motion.img
-                        src={auctionState.currentPlayer.image_path}
-                        alt={auctionState.currentPlayer.name}
-                        className="w-48 h-48 rounded-full border-4 border-yellow-400 object-cover flex-shrink-0"
-                        layoutId={`player-image-${auctionState.currentPlayer._id}`}
-                      />
-                      <div className="flex-grow w-full">
-                        <h3 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400">
-                          {auctionState.currentPlayer.name}
-                        </h3>
-                        <p className="text-xl text-gray-300 mt-1">
-                          {auctionState.currentPlayer.role} |{" "}
-                          {auctionState.currentPlayer.nationality}
-                        </p>
-                        <p className="text-lg text-gray-400 mt-2">
-                          Base:{" "}
-                          <strong>
-                            {formatCurrency(
-                              auctionState.currentPlayer.basePrice
-                            )}
-                          </strong>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      <StatDisplay
-                        title="T20I"
-                        stats={auctionState.currentPlayer.stats?.T20I}
-                      />
-                      <StatDisplay
-                        title="T20"
-                        stats={auctionState.currentPlayer.stats?.T20}
-                      />
-                    </div>
-                  </div>
-                  <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
-                    <p className="text-center text-gray-400 text-sm">
-                      CURRENT BID
-                    </p>
-                    <div className="text-7xl font-bold text-green-400 text-center my-4">
-                      <AnimatePresence mode="wait">
-                        <motion.p
-                          key={auctionState.currentBid}
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 20 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          {formatCurrency(auctionState.currentBid)}
-                        </motion.p>
-                      </AnimatePresence>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 flex-wrap">
-                      {quickIncrements.map((inc) => (
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          key={inc}
-                          onClick={() => handleBidUpdate(inc)}
-                          className="px-4 py-2 bg-blue-600/50 hover:bg-blue-600 rounded-md font-semibold transition-colors"
-                        >
-                          + {formatCurrency(inc)}
-                        </motion.button>
-                      ))}
-                      <div className="flex items-center gap-2">
-                        <div className="w-48">
-                          <CurrencyInput
-                            value={customIncrement.value}
-                            unit={customIncrement.unit}
-                            onValueChange={(e) =>
-                              setCustomIncrement((p) => ({
-                                ...p,
-                                value: e.target.value,
-                              }))
-                            }
-                            onUnitChange={(e) =>
-                              setCustomIncrement((p) => ({
-                                ...p,
-                                unit: e.target.value,
-                              }))
-                            }
-                          />
+                &larr; Back to Setup
+              </Link>
+            </header>
+
+            <AnimatePresence mode="wait">
+              {auctionState?.currentPlayer ? (
+                <motion.div
+                  key={auctionState.currentPlayer._id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+                >
+                  <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
+                      <div className="flex flex-col md:flex-row items-center gap-6">
+                        <motion.img
+                          src={auctionState.currentPlayer.image_path}
+                          alt={auctionState.currentPlayer.name}
+                          className="w-48 h-48 rounded-full border-4 border-yellow-400 object-cover flex-shrink-0"
+                          layoutId={`player-image-${auctionState.currentPlayer._id}`}
+                        />
+                        <div className="flex-grow w-full">
+                          <h3 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400">
+                            {auctionState.currentPlayer.name}
+                          </h3>
+                          <p className="text-xl text-gray-300 mt-1">
+                            {auctionState.currentPlayer.role} |{" "}
+                            {auctionState.currentPlayer.nationality}
+                          </p>
+                          <p className="text-lg text-gray-400 mt-2">
+                            Base:{" "}
+                            <strong>
+                              {formatCurrency(
+                                auctionState.currentPlayer.basePrice
+                              )}
+                            </strong>
+                          </p>
                         </div>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={handleCustomBidUpdate}
-                          className="px-4 py-2 bg-purple-600/50 hover:bg-purple-600 rounded-md font-semibold transition-colors"
-                        >
-                          Add
-                        </motion.button>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        <StatDisplay
+                          title="T20I"
+                          stats={auctionState.currentPlayer.stats?.T20I}
+                        />
+                        <StatDisplay
+                          title="T20"
+                          stats={auctionState.currentPlayer.stats?.T20}
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
+                      <p className="text-center text-gray-400 text-sm">
+                        CURRENT BID
+                      </p>
+                      <div className="text-7xl font-bold text-green-400 text-center my-4">
+                        <AnimatePresence mode="wait">
+                          <motion.p
+                            key={auctionState.currentBid}
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            {formatCurrency(auctionState.currentBid)}
+                          </motion.p>
+                        </AnimatePresence>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 flex-wrap">
+                        {quickIncrements.map((inc) => (
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            key={inc}
+                            onClick={() => handleBidUpdate(inc)}
+                            className="px-4 py-2 bg-blue-600/50 hover:bg-blue-600 rounded-md font-semibold transition-colors"
+                          >
+                            + {formatCurrency(inc)}
+                          </motion.button>
+                        ))}
+                        <div className="flex items-center gap-2">
+                          <div className="w-48">
+                            <CurrencyInput
+                              value={customIncrement.value}
+                              unit={customIncrement.unit}
+                              onValueChange={(e) =>
+                                setCustomIncrement((p) => ({
+                                  ...p,
+                                  value: e.target.value,
+                                }))
+                              }
+                              onUnitChange={(e) =>
+                                setCustomIncrement((p) => ({
+                                  ...p,
+                                  unit: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleCustomBidUpdate}
+                            className="px-4 py-2 bg-purple-600/50 hover:bg-purple-600 rounded-md font-semibold transition-colors"
+                          >
+                            Add
+                          </motion.button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-200 mb-4">
-                      Finalize Sale
-                    </h3>
-                    <select
-                      value={soldToTeamId}
-                      onChange={(e) => setSoldToTeamId(e.target.value)}
-                      className="w-full p-3 bg-gray-700/50 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">-- Select Winning Team --</option>
-                      {teams.map((t) => (
-                        <option key={t._id} value={t._id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-200 mb-4">
+                        Finalize Sale
+                      </h3>
+                      <CustomTeamSelect
+                        teams={teams}
+                        selectedTeamId={soldToTeamId}
+                        onSelect={setSoldToTeamId}
+                      />
+                    </div>
+                    <div className="space-y-4 mt-6">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() =>
+                          handleSellPlayer(auctionState.currentBid)
+                        }
+                        disabled={!soldToTeamId}
+                        className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-lg font-bold text-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        SOLD
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleUnsoldPlayer}
+                        className="w-full py-3 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 rounded-lg font-semibold text-lg transition-all"
+                      >
+                        UNSOLD
+                      </motion.button>
+                    </div>
                   </div>
-                  <div className="space-y-4 mt-6">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleSellPlayer(auctionState.currentBid)}
-                      disabled={!soldToTeamId}
-                      className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-lg font-bold text-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      SOLD
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleUnsoldPlayer}
-                      className="w-full py-3 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 rounded-lg font-semibold text-lg transition-all"
-                    >
-                      UNSOLD
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="waiting"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-center text-gray-500 py-20 bg-black/30 backdrop-blur-lg rounded-2xl border border-white/10"
-              >
-                <h2 className="text-3xl font-bold">
-                  Waiting for Auction to Start
-                </h2>
-                <p className="mt-2">
-                  Use the sidebar to select and start a pool.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </main>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="waiting"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center text-gray-500 py-20 bg-black/30 backdrop-blur-lg rounded-2xl border border-white/10"
+                >
+                  <h2 className="text-3xl font-bold">
+                    Waiting for Auction to Start
+                  </h2>
+                  <p className="mt-2">
+                    Use the sidebar to select and start a pool.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </main>
 
-      <AuctionSidebar
-        pools={pools}
-        upcomingPlayers={auctionState?.upcomingPlayers}
-        onStartPool={startPool}
-        isOpen={isSidebarOpen}
-        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-      />
+        <AuctionSidebar
+          pools={pools}
+          upcomingPlayers={auctionState?.upcomingPlayers}
+          onStartPool={startPool}
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        />
+      </div>
 
-      <footer className="fixed bottom-0 left-0 right-0 bg-black/40 backdrop-blur-md border-t border-white/10 z-30">
+      <footer className="bg-black/40 backdrop-blur-md border-t border-white/10 z-30">
         <div
-          className={`flex justify-center items-center h-16 transition-all duration-300 ${
+          className={`transition-all duration-300 ${
             isSidebarOpen ? "pr-80" : ""
           }`}
         >
-          <div className="flex space-x-4 px-4 overflow-x-auto">
-            {teams.map((team) => (
-              <div
-                key={team._id}
-                className={`flex items-center space-x-2 p-2 rounded-lg flex-shrink-0 transition-colors ${
-                  soldToTeamId === team._id ? "bg-blue-500/50" : ""
-                }`}
-              >
+          <div className="flex justify-center items-center h-16">
+            <div className="flex space-x-4 px-4 overflow-x-auto">
+              {teams.map((team) => (
                 <div
-                  className="w-4 h-4 rounded-full border-2"
-                  style={{
-                    backgroundColor: team.colorPrimary,
-                    borderColor: team.colorAccent,
-                  }}
-                ></div>
-                <span className="font-semibold text-sm truncate w-24">
-                  {team.name}
-                </span>
-                <span className="text-green-400 text-sm font-mono">
-                  {formatCurrency(team.purseRemaining)}
-                </span>
-              </div>
-            ))}
+                  key={team._id}
+                  className={`flex items-center space-x-2 p-2 rounded-lg flex-shrink-0 transition-colors ${
+                    soldToTeamId === team._id ? "bg-blue-500/50" : ""
+                  }`}
+                >
+                  <div
+                    className="w-4 h-4 rounded-full border-2"
+                    style={{
+                      backgroundColor: team.colorPrimary,
+                      borderColor: team.colorAccent,
+                    }}
+                  ></div>
+                  <span className="font-semibold text-sm truncate w-24">
+                    {team.name}
+                  </span>
+                  <span className="text-green-400 text-sm font-mono">
+                    {formatCurrency(team.purseRemaining)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="text-center text-xs text-gray-500 pb-2">
+            IPL Auction Simulator - A Modern Bidding Experience
           </div>
         </div>
       </footer>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api, getToken, setToken } from "@/lib/api";
 import { io } from "socket.io-client";
 import { formatCurrency, getTextColorForBackground } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
 // --- Reusable Notification Component ---
 const Notification = memo(function Notification({ message, type, onClose }) {
