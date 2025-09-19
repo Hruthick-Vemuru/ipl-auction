@@ -3,6 +3,7 @@
  ********************************************************************************/
 // This version fixes the "Objects are not valid as a React child" crash by
 // correctly processing the player's nationality and role from the API.
+// It also adds a confirmation modal when making a sold player available again.
 
 import React, { useState, useEffect, useCallback, memo } from "react";
 import { useRouter } from "next/router";
@@ -54,7 +55,7 @@ const ConfirmationModal = memo(function ConfirmationModal({
             onClick={onConfirm}
             className="px-6 py-2 bg-red-600 hover:bg-red-500 rounded-md font-semibold transition-colors"
           >
-            Confirm Delete
+            Confirm
           </button>
         </div>
       </div>
@@ -170,9 +171,6 @@ const AddPlayerForm = memo(function AddPlayerForm({ onPlayerAdded }) {
       setMsg("");
       const details = await api.cricData.getPlayerDetails(selectedPlayer.id);
 
-      // --- THIS IS THE FIX ---
-      // We now correctly process the 'position' object and 'country' object
-      // into simple strings before setting the state.
       const role = getRole(details.position?.name);
       const nationality =
         details.country?.name === "India"
@@ -307,7 +305,7 @@ const PlayerAssignmentList = memo(function PlayerAssignmentList({
             className="flex items-center justify-between p-2 bg-gray-700 rounded group"
           >
             <span
-              onClick={() => onPlayerClick(p._id)}
+              onClick={() => onPlayerClick(p)}
               className="flex-grow cursor-pointer"
             >
               {p.name} <span className="text-gray-400">({p.role})</span>
@@ -341,6 +339,7 @@ const PlayerAssignmentList = memo(function PlayerAssignmentList({
 
 const PoolManager = memo(function PoolManager({
   tournamentId,
+  tournament,
   onPoolsUpdate,
   onShowConfirm,
   refreshTrigger,
@@ -390,7 +389,36 @@ const PoolManager = memo(function PoolManager({
   }, [newPoolName, tournamentId, pools.length, refreshData]);
 
   const movePlayer = useCallback(
-    async (playerId, fromPoolId, toPoolId) => {
+    async (player, fromPoolId, toPoolId) => {
+      const playerId = player._id;
+
+      if (fromPoolId !== null) {
+        if (player.status === "Sold") {
+          const team = tournament?.teams.find((t) => t._id === player.soldTo);
+          onShowConfirm(
+            `This player was sold to ${
+              team ? team.name : "a team"
+            }. Making them available again will remove them from the team and refund their purse. Are you sure?`,
+            async () => {
+              setIsMoving(true);
+              try {
+                await api.tournaments.removePlayerFromPool(
+                  tournamentId,
+                  fromPoolId,
+                  playerId
+                );
+                await refreshData();
+              } catch (error) {
+                console.error("Failed to move player:", error);
+              } finally {
+                setIsMoving(false);
+              }
+            }
+          );
+          return;
+        }
+      }
+
       setIsMoving(true);
       try {
         if (fromPoolId === null) {
@@ -403,13 +431,11 @@ const PoolManager = memo(function PoolManager({
             players: updatedTargetPlayers,
           });
         } else {
-          const sourcePool = pools.find((p) => p._id === fromPoolId);
-          const updatedSourcePlayers = sourcePool.players
-            .filter((p) => p._id !== playerId)
-            .map((p) => p._id);
-          await api.tournaments.updatePool(tournamentId, fromPoolId, {
-            players: updatedSourcePlayers,
-          });
+          await api.tournaments.removePlayerFromPool(
+            tournamentId,
+            fromPoolId,
+            playerId
+          );
         }
         await refreshData();
       } catch (error) {
@@ -418,7 +444,7 @@ const PoolManager = memo(function PoolManager({
         setIsMoving(false);
       }
     },
-    [pools, tournamentId, refreshData]
+    [pools, tournamentId, tournament, refreshData, onShowConfirm]
   );
 
   const handleDeletePlayerRequest = useCallback(
@@ -526,8 +552,8 @@ const PoolManager = memo(function PoolManager({
             <PlayerAssignmentList
               title="Unassigned Players"
               players={unassignedPlayers}
-              onPlayerClick={(playerId) =>
-                movePlayer(playerId, null, selectedPool._id)
+              onPlayerClick={(player) =>
+                movePlayer(player, null, selectedPool._id)
               }
               onDeleteClick={handleDeletePlayerRequest}
               isLoading={isMoving}
@@ -535,8 +561,8 @@ const PoolManager = memo(function PoolManager({
             <PlayerAssignmentList
               title={`Players in ${selectedPool.name}`}
               players={selectedPool.players}
-              onPlayerClick={(playerId) =>
-                movePlayer(playerId, selectedPool._id, null)
+              onPlayerClick={(player) =>
+                movePlayer(player, selectedPool._id, null)
               }
               onDeleteClick={handleDeletePlayerRequest}
               isLoading={isMoving}
@@ -626,6 +652,7 @@ export default function AuctionControlRoom() {
         {tournamentId && (
           <PoolManager
             tournamentId={tournamentId}
+            tournament={tournament}
             onPoolsUpdate={handlePoolsUpdate}
             onShowConfirm={handleShowConfirm}
             refreshTrigger={refreshKey}

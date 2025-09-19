@@ -192,7 +192,6 @@ r.get("/my", auth, async (req, res) => {
   res.json(tournaments);
 });
 
-// --- THIS IS THE CORRECTED ROUTE ---
 // Get a single tournament by ID (for admins OR a team member of that tournament)
 r.get("/:tournamentId", auth, async (req, res) => {
   try {
@@ -201,7 +200,6 @@ r.get("/:tournamentId", auth, async (req, res) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    // A user is authorized if they are the admin of this tournament OR a team member within it.
     const isAdminOwner =
       req.user.role === "admin" &&
       String(tournament.admin) === String(req.user.id);
@@ -210,11 +208,9 @@ r.get("/:tournamentId", auth, async (req, res) => {
       String(req.user.tournamentId) === String(tournament._id);
 
     if (!isAdminOwner && !isTeamMemberOfTournament) {
-      return res
-        .status(403)
-        .json({
-          error: "You are not authorized to view this tournament's details.",
-        });
+      return res.status(403).json({
+        error: "You are not authorized to view this tournament's details.",
+      });
     }
 
     res.json(tournament);
@@ -335,6 +331,18 @@ r.delete("/:tournamentId/pools/:poolId", auth, async (req, res) => {
   try {
     const { tournamentId, poolId } = req.params;
 
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+    const poolToDelete = tournament.pools.id(poolId);
+    if (poolToDelete && poolToDelete.players.length > 0) {
+      await Player.updateMany(
+        { _id: { $in: poolToDelete.players } },
+        { $set: { status: "Available", soldTo: null, soldPrice: 0 } }
+      );
+    }
+
     const updatedTournament = await Tournament.findByIdAndUpdate(
       tournamentId,
       { $pull: { pools: { _id: poolId } } },
@@ -353,6 +361,51 @@ r.delete("/:tournamentId/pools/:poolId", auth, async (req, res) => {
     res.status(500).json({ error: "Server error deleting pool" });
   }
 });
+
+// --- UPDATED ENDPOINT TO FIX PLAYER "VOID" BUG ---
+r.delete(
+  "/:tournamentId/pools/:poolId/players/:playerId",
+  auth,
+  async (req, res) => {
+    if (req.user.role !== "admin")
+      return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { tournamentId, poolId, playerId } = req.params;
+      const player = await Player.findById(playerId);
+      if (!player) {
+        return res.status(404).json({ error: "Player not found" });
+      }
+
+      // If player was sold, refund the team
+      if (player.status === "Sold" && player.soldTo) {
+        await Tournament.updateOne(
+          { _id: tournamentId, "teams._id": player.soldTo },
+          {
+            $inc: { "teams.$.purseRemaining": player.soldPrice },
+            $pull: { "teams.$.players": playerId },
+          }
+        );
+      }
+
+      // Reset the player's status
+      player.status = "Available";
+      player.soldPrice = 0;
+      player.soldTo = null;
+      await player.save();
+
+      // Remove the player from the tournament's pool
+      await Tournament.updateOne(
+        { _id: tournamentId, "pools._id": poolId },
+        { $pull: { "pools.$.players": playerId } }
+      );
+
+      res.status(204).send();
+    } catch (e) {
+      console.error("Error removing player from pool:", e);
+      res.status(500).json({ error: "Server error removing player from pool" });
+    }
+  }
+);
 
 // --- PUBLIC ROUTES (No auth needed) ---
 

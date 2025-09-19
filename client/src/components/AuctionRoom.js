@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
-import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken } from "../../../lib/api";
+import { api } from "../lib/api";
 import { io } from "socket.io-client";
-import { formatCurrency } from "../../../lib/utils";
+import { formatCurrency } from "../lib/utils";
 import * as THREE from "three";
 import { motion, AnimatePresence } from "framer-motion";
-import anime from "animejs";
 
 // --- Reusable Notification Component ---
 const Notification = memo(function Notification({ message, type, onClose }) {
@@ -166,7 +164,7 @@ const ThreeJSCanvas = () => {
   return (
     <div
       ref={mountRef}
-      className="fixed top-0 left-0 w-full h-full -z-10 bg-gradient-to-br from-gray-900 via-black to-blue-900/50"
+      className="fixed top-0 left-0 w-full h-full -z-10 bg-gradient-to-br from-gray-900 to-black"
     />
   );
 };
@@ -179,7 +177,7 @@ const CurrencyInput = memo(function CurrencyInput({
   onUnitChange,
 }) {
   return (
-    <div className="flex items-center relative bg-white/5 border border-white/20 rounded-md focus-within:ring-2 focus-within:ring-blue-500">
+    <div className="flex items-center relative bg-gray-700/50 border border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-blue-500">
       <span className="pl-3 text-gray-400">₹</span>
       <input
         type="number"
@@ -191,7 +189,7 @@ const CurrencyInput = memo(function CurrencyInput({
       <select
         value={unit}
         onChange={onUnitChange}
-        className="bg-white/10 h-full rounded-r-md px-2 text-sm appearance-none focus:outline-none"
+        className="bg-gray-800/80 h-full rounded-r-md px-2 text-sm appearance-none focus:outline-none"
       >
         <option>Lakhs</option>
         <option>Crores</option>
@@ -200,204 +198,12 @@ const CurrencyInput = memo(function CurrencyInput({
   );
 });
 
-// --- StatDisplay Component ---
-const StatDisplay = ({ title, stats }) => {
-  if (!stats || (!stats.batting && !stats.bowling)) return null;
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="bg-black/30 p-3 rounded-lg border border-white/10"
-    >
-      <h4 className="font-bold text-blue-400 text-md mb-2">{title} Career</h4>
-      {stats.batting && stats.batting.runs > 0 && (
-        <div>
-          <h5 className="text-xs text-gray-400 uppercase tracking-wider">
-            Batting
-          </h5>
-          <div className="grid grid-cols-5 gap-2 text-center mt-1">
-            <div>
-              <div className="text-xs text-gray-500">Runs</div>
-              <div className="font-bold">{stats.batting.runs}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">HS</div>
-              <div className="font-bold">{stats.batting.highest_score}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">SR</div>
-              <div className="font-bold">{stats.batting.strike_rate}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">100s</div>
-              <div className="font-bold">{stats.batting.hundreds}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">50s</div>
-              <div className="font-bold">{stats.batting.fifties}</div>
-            </div>
-          </div>
-        </div>
-      )}
-      {stats.bowling && stats.bowling.wickets > 0 && (
-        <div className="mt-2">
-          <h5 className="text-xs text-gray-400 uppercase tracking-wider">
-            Bowling
-          </h5>
-          <div className="grid grid-cols-3 gap-2 text-center mt-1">
-            <div>
-              <div className="text-xs text-gray-500">Wickets</div>
-              <div className="font-bold">{stats.bowling.wickets}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Avg</div>
-              <div className="font-bold">{stats.bowling.average}</div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">SR</div>
-              <div className="font-bold">{stats.bowling.strike_rate}</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </motion.div>
-  );
-};
+// StatDisplay remains the same...
 
-// --- Collapsible Sidebar Component ---
-const AuctionSidebar = ({
-  pools,
-  upcomingPlayers,
-  onStartPool,
-  isOpen,
-  onToggle,
-}) => {
-  const [activeTab, setActiveTab] = useState("pools");
+// AuctionSidebar remains the same...
 
-  return (
-    <motion.div
-      className={`fixed top-0 right-0 h-full bg-black/50 backdrop-blur-lg border-l border-white/10 z-40 w-80`}
-      animate={{ x: isOpen ? 0 : "100%" }}
-      transition={{ ease: "easeInOut", duration: 0.3 }}
-    >
-      <button
-        onClick={onToggle}
-        className="absolute top-4 -left-12 bg-black/50 backdrop-blur-sm border border-white/10 p-2 rounded-l-lg transition-colors hover:bg-blue-500/50"
-      >
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }}>
-          {isOpen ? (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          ) : (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          )}
-        </motion.div>
-      </button>
-
-      <div className="p-4 h-full flex flex-col">
-        <div className="flex border-b border-white/10 mb-4">
-          <button
-            onClick={() => setActiveTab("pools")}
-            className={`flex-1 py-2 font-semibold ${
-              activeTab === "pools"
-                ? "text-blue-400 border-b-2 border-blue-400"
-                : "text-gray-400"
-            }`}
-          >
-            Pools
-          </button>
-          <button
-            onClick={() => setActiveTab("upcoming")}
-            className={`flex-1 py-2 font-semibold ${
-              activeTab === "upcoming"
-                ? "text-blue-400 border-b-2 border-blue-400"
-                : "text-gray-400"
-            }`}
-          >
-            Upcoming
-          </button>
-        </div>
-
-        <div className="flex-grow overflow-y-auto">
-          {activeTab === "pools" && (
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold text-gray-300 px-2">
-                Start a Pool
-              </h3>
-              {pools.map((pool, index) => {
-                const hasAvailablePlayers = pool.players.some(
-                  (p) => p.status === "Available"
-                );
-                return (
-                  <motion.button
-                    key={pool._id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    onClick={() => onStartPool(pool._id)}
-                    disabled={pool.isCompleted || !hasAvailablePlayers}
-                    className="w-full text-left px-4 py-2 bg-white/5 hover:bg-white/10 rounded-md font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {pool.name} {pool.isCompleted ? "(Completed)" : ""}
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
-          {activeTab === "upcoming" && (
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold text-gray-300 px-2">
-                Next Players
-              </h3>
-              {upcomingPlayers?.map((p, index) => (
-                <motion.div
-                  key={p._id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-white/5 p-2 rounded text-sm"
-                >
-                  <span className="font-semibold">{p.name}</span>{" "}
-                  <span className="text-gray-400">({p.role})</span>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-export default function LiveAuctionPage() {
-  const router = useRouter();
-  const { tournamentId } = router.query;
+// --- Main Component ---
+export default function AuctionRoom({ tournamentId, token, router }) {
   const [tournament, setTournament] = useState(null);
   const [auctionState, setAuctionState] = useState(null);
   const [teams, setTeams] = useState([]);
@@ -410,24 +216,16 @@ export default function LiveAuctionPage() {
   });
   const socketRef = useRef(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isClient, setIsClient] = useState(false);
 
+  // Socket and data fetching useEffect
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (!tournamentId) return;
-    const token = getToken();
-    if (!token) {
+    if (!tournamentId || !token) {
       router.push("/admin/login");
       return;
     }
-
     api.tournaments.getById(tournamentId).then(setTournament);
     api.tournaments.getTeams(tournamentId).then(setTeams);
     api.tournaments.listPools(tournamentId).then(setPools);
-
     socketRef.current = io(
       process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000"
     );
@@ -444,9 +242,8 @@ export default function LiveAuctionPage() {
     socketRef.current.on("auction_notification", (data) =>
       setNotification(data)
     );
-
     return () => socketRef.current.disconnect();
-  }, [tournamentId, router]);
+  }, [tournamentId, token, router]);
 
   const handleBidUpdate = useCallback(
     (increment) => {
@@ -528,16 +325,8 @@ export default function LiveAuctionPage() {
 
   const quickIncrements = [100000, 500000, 1000000];
 
-  if (!isClient) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        Loading Auction...
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen text-white flex overflow-hidden">
+    <div className="min-h-screen bg-gray-900 text-white flex overflow-hidden">
       <ThreeJSCanvas />
       <Notification
         message={notification?.message}
@@ -546,7 +335,7 @@ export default function LiveAuctionPage() {
       />
 
       <main
-        className={`flex-grow p-4 md:p-8 transition-all duration-300 relative pb-32 ${
+        className={`flex-grow p-4 md:p-8 transition-all duration-300 relative pb-20 ${
           isSidebarOpen ? "mr-80" : ""
         }`}
       >
@@ -577,7 +366,7 @@ export default function LiveAuctionPage() {
                 className="grid grid-cols-1 lg:grid-cols-3 gap-8"
               >
                 <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
+                  <div className="bg-black/30 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
                     <div className="flex flex-col md:flex-row items-center gap-6">
                       <motion.img
                         src={auctionState.currentPlayer.image_path}
@@ -614,7 +403,7 @@ export default function LiveAuctionPage() {
                       />
                     </div>
                   </div>
-                  <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
+                  <div className="bg-black/30 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl">
                     <p className="text-center text-gray-400 text-sm">
                       CURRENT BID
                     </p>
@@ -674,7 +463,7 @@ export default function LiveAuctionPage() {
                     </div>
                   </div>
                 </div>
-                <div className="bg-black/20 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl flex flex-col justify-between">
+                <div className="bg-black/30 backdrop-blur-lg p-6 rounded-2xl border border-white/10 shadow-2xl flex flex-col justify-between">
                   <div>
                     <h3 className="text-2xl font-bold text-gray-200 mb-4">
                       Finalize Sale

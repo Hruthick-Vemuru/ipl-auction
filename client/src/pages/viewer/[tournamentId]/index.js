@@ -3,9 +3,9 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { io } from "socket.io-client";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getTextColorForBackground } from "@/lib/utils";
 
-// --- Notification Component ---
+// --- Reusable Notification Component ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -29,46 +29,132 @@ const Notification = memo(function Notification({ message, type, onClose }) {
   );
 });
 
-// Re-usable PlayerCard component
+// --- FINAL, RESPONSIVE PlayerCard Component ---
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
+  // Function to determine the best font size class based on name length
+  const getNameSizeClass = (name) => {
+    if (name.length > 18) {
+      return "text-base"; // Smaller font for very long names
+    }
+    if (name.length > 12) {
+      return "text-lg"; // Medium font for medium names
+    }
+    return "text-xl"; // Larger font for shorter names
+  };
+
   return (
-    <div
-      className="relative w-56 h-14 flex items-center justify-center transition-transform hover:scale-110 group"
-      style={{
-        clipPath: "polygon(7% 0%, 93% 0%, 100% 50%, 93% 100%, 7% 100%, 0% 50%)",
-      }}
-    >
+    <div className="relative w-80 h-24 group transform transition-transform hover:scale-105">
+      {/* The shaped background */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm group-hover:bg-black/70 transition-colors"
+        className="absolute inset-0 bg-gray-800 bg-opacity-60 backdrop-blur-sm border border-gray-700 group-hover:bg-gray-700/80 transition-all duration-300"
         style={{
-          clipPath:
-            "polygon(7% 0%, 93% 0%, 100% 50%, 93% 100%, 7% 100%, 0% 50%)",
+          clipPath: "polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%)",
         }}
-      ></div>
-      <div className="relative z-10 text-center p-2 w-full">
-        {player.nationality === "Overseas" && (
+      />
+
+      {/* Content */}
+      <div className="relative flex items-center h-full p-2 text-white">
+        {/* Player Image */}
+        <img
+          src={player.image_path}
+          alt={player.name}
+          className="w-20 h-20 object-cover rounded-full flex-shrink-0 border-2"
+          style={{ borderColor: accentColor }}
+        />
+
+        {/* Player Info */}
+        <div className="ml-4 flex-grow overflow-hidden">
+          <p
+            className={`font-bold leading-tight truncate ${getNameSizeClass(
+              player.name
+            )}`}
+            style={{ color: accentColor }}
+          >
+            {player.name}
+          </p>
+          {player.soldPrice > 0 && (
+            <p className="text-green-400 font-semibold text-lg mt-1">
+              {formatCurrency(player.soldPrice)}
+            </p>
+          )}
+        </div>
+
+        {/* Overseas Icon */}
+        {player.nationality !== "Indian" && (
           <div
-            className="absolute top-1 right-5 text-lg"
+            className="absolute top-2 right-4 text-2xl"
             title="Overseas Player"
           >
             ✈️
-          </div>
-        )}
-        <div
-          className="font-bold text-base leading-tight truncate"
-          style={{ color: accentColor }}
-        >
-          {player.name}
-        </div>
-        {player.soldPrice > 0 && (
-          <div className="text-green-400 font-semibold text-xs mt-1">
-            {formatCurrency(player.soldPrice)}
           </div>
         )}
       </div>
     </div>
   );
 });
+
+// --- StatDisplay Component ---
+const StatDisplay = ({ title, stats }) => {
+  if (!stats || (!stats.batting && !stats.bowling)) return null;
+
+  return (
+    <div className="bg-gray-900 p-3 rounded">
+      <h4 className="font-bold text-blue-400 text-md mb-2">
+        {title} Career Stats
+      </h4>
+      {stats.batting && stats.batting.runs > 0 && (
+        <div>
+          <h5 className="text-xs text-gray-400 uppercase tracking-wider">
+            Batting
+          </h5>
+          <div className="grid grid-cols-5 gap-2 text-center mt-1">
+            <div>
+              <div className="text-xs text-gray-500">Runs</div>
+              <div className="font-bold">{stats.batting.runs}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">HS</div>
+              <div className="font-bold">{stats.batting.highest_score}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">SR</div>
+              <div className="font-bold">{stats.batting.strike_rate}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">100s</div>
+              <div className="font-bold">{stats.batting.hundreds}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">50s</div>
+              <div className="font-bold">{stats.batting.fifties}</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {stats.bowling && stats.bowling.wickets > 0 && (
+        <div className="mt-2">
+          <h5 className="text-xs text-gray-400 uppercase tracking-wider">
+            Bowling
+          </h5>
+          <div className="grid grid-cols-3 gap-2 text-center mt-1">
+            <div>
+              <div className="text-xs text-gray-500">Wickets</div>
+              <div className="font-bold">{stats.bowling.wickets}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">Average</div>
+              <div className="font-bold">{stats.bowling.average}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">SR</div>
+              <div className="font-bold">{stats.bowling.strike_rate}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Main Viewer Dashboard Component
 export default function ViewerDashboard() {
@@ -152,21 +238,47 @@ export default function ViewerDashboard() {
                 <h3 className="text-2xl font-bold text-yellow-400 mb-4">
                   Currently Bidding
                 </h3>
-                <div className="text-center bg-black/50 p-8 rounded-lg">
-                  <p className="text-4xl font-bold">
-                    {auctionState.currentPlayer.name}
-                  </p>
-                  <p className="text-xl text-gray-400">
-                    {auctionState.currentPlayer.role}
-                  </p>
-                  <p className="text-2xl font-light mt-4">
-                    Base Price:{" "}
-                    <span className="font-bold">
-                      {formatCurrency(auctionState.currentPlayer.basePrice)}
-                    </span>
-                  </p>
-                  <p className="text-4xl font-bold mt-4 text-green-400">
-                    Current Bid: {formatCurrency(auctionState.currentBid)}
+                <div className="flex flex-col md:flex-row items-center gap-6 mb-6">
+                  <img
+                    src={auctionState.currentPlayer.image_path}
+                    alt={auctionState.currentPlayer.name}
+                    className="w-48 h-48 rounded-full border-4 border-yellow-400 object-cover"
+                  />
+                  <div className="flex-grow w-full">
+                    <h3 className="text-4xl font-bold text-yellow-400">
+                      {auctionState.currentPlayer.name}
+                    </h3>
+                    <p className="text-xl text-gray-300 mt-1">
+                      {auctionState.currentPlayer.role} |{" "}
+                      {auctionState.currentPlayer.nationality}
+                    </p>
+                    {auctionState.currentPlayer.battingstyle && (
+                      <p className="text-md text-gray-400">
+                        ({auctionState.currentPlayer.battingstyle})
+                      </p>
+                    )}
+                    <p className="text-lg text-gray-400 mt-2">
+                      Base Price:{" "}
+                      <strong>
+                        {formatCurrency(auctionState.currentPlayer.basePrice)}
+                      </strong>
+                    </p>
+
+                    <div className="mt-4 space-y-3">
+                      <StatDisplay
+                        title="T20I"
+                        stats={auctionState.currentPlayer.stats?.T20I}
+                      />
+                      <StatDisplay
+                        title="T20"
+                        stats={auctionState.currentPlayer.stats?.T20}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="my-6 p-4 bg-black/30 rounded-lg text-center border border-gray-600">
+                  <p className="text-6xl font-bold text-green-400 transition-colors duration-300">
+                    {formatCurrency(auctionState.currentBid)}
                   </p>
                 </div>
               </div>
@@ -242,7 +354,7 @@ export default function ViewerDashboard() {
                 >
                   {role}
                 </h3>
-                <div className="flex flex-wrap gap-x-8 gap-y-4 justify-center">
+                <div className="flex flex-wrap gap-4 justify-center">
                   {players.map((p) => (
                     <PlayerCard
                       key={p._id}

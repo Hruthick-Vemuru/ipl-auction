@@ -81,6 +81,12 @@ export const api = {
       req(`/api/tournaments/${tournamentId}/pools/${poolId}`, "PUT", poolData),
     deletePool: (tournamentId, poolId) =>
       req(`/api/tournaments/${tournamentId}/pools/${poolId}`, "DELETE"),
+    // --- NEW FUNCTION TO FIX BUG ---
+    removePlayerFromPool: (tournamentId, poolId, playerId) =>
+      req(
+        `/api/tournaments/${tournamentId}/pools/${poolId}/players/${playerId}`,
+        "DELETE"
+      ),
   },
   players: {
     list: (q = "") => req("/api/players" + q),
