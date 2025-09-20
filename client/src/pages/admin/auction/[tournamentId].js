@@ -1,3 +1,4 @@
+// hruthick-vemuru/ipl-auction/ipl-auction-d7882c4de4b37b6a6b089a1c53fdf2223d8f3918/client/src/pages/admin/auction/[tournamentId].js
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -457,19 +458,10 @@ const PlayerAssignmentList = memo(function PlayerAssignmentList({
             p.status === "Sold"
               ? tournament.teams.find((t) => t._id === p.soldTo)
               : null;
-          const bgColor = team
-            ? team.colorPrimary
-            : "rgba(255, 255, 255, 0.05)";
-          const borderColor = team ? team.colorAccent : "transparent";
-
           return (
             <li
               key={p._id}
-              className={`flex items-center justify-between p-2 rounded group transition-all duration-300`}
-              style={{
-                backgroundColor: p.status === "Sold" ? bgColor : "",
-                border: p.status === "Sold" ? `2px solid ${borderColor}` : "",
-              }}
+              className={`flex items-center justify-between p-2 rounded group transition-all duration-300 bg-white/5`}
             >
               <img
                 src={p.image_path}
@@ -493,23 +485,32 @@ const PlayerAssignmentList = memo(function PlayerAssignmentList({
                   )}
                 </div>
               </div>
-              <button
-                onClick={() => onDeleteClick(p)}
-                className="ml-2 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
-                    clipRule="evenodd"
+              <div className="flex items-center space-x-2">
+                {team && team.logo && (
+                  <img
+                    src={team.logo}
+                    alt={team.name}
+                    className="w-8 h-8 object-contain"
                   />
-                </svg>
-              </button>
+                )}
+                <button
+                  onClick={() => onDeleteClick(p)}
+                  className="text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
             </li>
           );
         })}

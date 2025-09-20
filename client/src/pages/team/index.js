@@ -1,3 +1,4 @@
+// hruthick-vemuru/ipl-auction/ipl-auction-d7882c4de4b37b6a6b089a1c53fdf2223d8f3918/client/src/pages/team/index.js
 import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -5,6 +6,79 @@ import { api, getToken, setToken } from "@/lib/api";
 import { io } from "socket.io-client";
 import { formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+
+// --- NEW: Celebration Component (copied from run-auction) ---
+const SoldCelebration = ({ player, team, onComplete }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 7000); // Auto-dismiss after 7 seconds
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  const confetti = Array.from({ length: 100 });
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/80 backdrop-blur-md"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 1 } }}
+    >
+      <div className="absolute inset-0 overflow-hidden">
+        {confetti.map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute"
+            style={{
+              width: Math.random() * 10 + 5,
+              height: Math.random() * 10 + 5,
+              background: i % 2 === 0 ? team.colorPrimary : team.colorAccent,
+              top: `${Math.random() * -50}%`,
+              left: `${Math.random() * 100}%`,
+            }}
+            animate={{
+              y: "120vh",
+              x: Math.random() * 200 - 100,
+              rotate: Math.random() * 360,
+            }}
+            transition={{
+              duration: Math.random() * 3 + 4,
+              ease: "linear",
+              repeat: Infinity,
+              delay: Math.random() * 2,
+            }}
+          />
+        ))}
+      </div>
+
+      <motion.div
+        className="text-center flex flex-col items-center"
+        initial={{ scale: 0.5, y: 100 }}
+        animate={{ scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 100, damping: 15 }}
+      >
+        <img
+          src={player.image_path}
+          alt={player.name}
+          className="w-64 h-64 rounded-full border-8 border-yellow-400 object-cover shadow-2xl"
+        />
+        <h2
+          className="text-6xl font-bold mt-4"
+          style={{ color: team.colorAccent }}
+        >
+          {player.name}
+        </h2>
+        <p className="text-4xl font-semibold text-green-400 mt-2">
+          {formatCurrency(player.soldPrice)}
+        </p>
+        <p className="text-2xl text-white mt-2">SOLD TO</p>
+        <div className="flex items-center gap-4 mt-2">
+          <img src={team.logo} alt={team.name} className="h-16" />
+          <h3 className="text-4xl font-bold">{team.name}</h3>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
 
 // --- Enhanced Notification Component ---
 const Notification = memo(function Notification({ message, type, onClose }) {
@@ -241,6 +315,7 @@ export default function TeamDashboard() {
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
   const [isImpersonating, setIsImpersonating] = useState(false);
+  const [celebrationData, setCelebrationData] = useState(null);
 
   const handleLogout = useCallback(() => {
     setToken(null);
@@ -327,10 +402,13 @@ export default function TeamDashboard() {
 
     socket.on("auction_notification", (data) => {
       setNotification(data);
+      if (data.type === "sold" && data.team._id === myTeam?._id) {
+        setCelebrationData({ player: data.player, team: data.team });
+      }
     });
 
     return () => socket.disconnect();
-  }, [router]);
+  }, [router, myTeam?._id]);
 
   const activeViewData = useMemo(() => {
     if (!myTeam || !activeTab)
@@ -629,6 +707,15 @@ export default function TeamDashboard() {
         backgroundAttachment: "fixed",
       }}
     >
+      <AnimatePresence>
+        {celebrationData && (
+          <SoldCelebration
+            player={celebrationData.player}
+            team={celebrationData.team}
+            onComplete={() => setCelebrationData(null)}
+          />
+        )}
+      </AnimatePresence>
       {notification && (
         <Notification
           message={notification.message}
