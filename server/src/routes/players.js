@@ -48,16 +48,24 @@ r.post("/", auth, async (req, res) => {
     // This will now receive the clean `stats` object from the frontend
     const playerData = req.body;
 
+    // Check for existing player with the same name under the same admin
     const existingPlayer = await Player.findOne({
       name: playerData.name.trim(),
       admin: req.user.id,
     });
+
     if (existingPlayer) {
-      return res
-        .status(409)
-        .json({
-          error: `You have already created a player named "${playerData.name}".`,
+      // If the player exists, check if they are already in any pool of any tournament for this admin
+      const tournaments = await Tournament.find({
+        admin: req.user.id,
+        "pools.players": existingPlayer._id,
+      });
+
+      if (tournaments.length > 0) {
+        return res.status(409).json({
+          error: `You have already created a player named "${playerData.name}" and assigned them to a tournament.`,
         });
+      }
     }
 
     const player = await Player.create({

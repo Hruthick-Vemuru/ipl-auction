@@ -1,10 +1,19 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  memo,
+  useRef,
+} from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken } from "../../lib/api";
-import { formatCurrency, getTextColorForBackground } from "../../lib/utils";
+import { formatCurrency } from "../../lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
+import * as THREE from "three";
 
-// --- NEW: Dynamic Validation Logic ---
+// --- Validation Logic (Unchanged) ---
 const countRoles = (players) => {
   return players.reduce((acc, p) => {
     acc[p.role] = (acc[p.role] || 0) + 1;
@@ -38,9 +47,8 @@ const validatePlayingXI = (players) => {
     return "At least 5 bowlers or allrounders required in Playing XI";
   return null;
 };
-// --- End of Validation Logic ---
 
-// --- Reusable Components (Notification, PlayerCard) ---
+// --- Reusable Components ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -48,19 +56,32 @@ const Notification = memo(function Notification({ message, type, onClose }) {
     }, 5000);
     return () => clearTimeout(timer);
   }, [onClose, message, type]);
+
   const baseClasses =
-    "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 transition-opacity duration-300";
-  const typeClasses = type === "success" ? "bg-green-600" : "bg-red-600";
+    "fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 border";
+  const typeClasses =
+    type === "success"
+      ? "bg-green-500/20 border-green-500"
+      : "bg-red-500/20 border-red-500";
   return (
-    <div className={`${baseClasses} ${typeClasses}`}>
-      {message}
-      <button
-        onClick={onClose}
-        className="ml-4 font-bold opacity-70 hover:opacity-100"
-      >
-        X
-      </button>
-    </div>
+    <AnimatePresence>
+      {message && (
+        <motion.div
+          initial={{ opacity: 0, x: 100 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 100 }}
+          className={`${baseClasses} ${typeClasses}`}
+        >
+          {message}
+          <button
+            onClick={onClose}
+            className="ml-4 font-bold opacity-70 hover:opacity-100"
+          >
+            &times;
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 });
 
@@ -75,32 +96,38 @@ const PlayerCard = memo(function PlayerCard({
   onSetViceCaptain,
 }) {
   return (
-    <div className="bg-black/20 rounded-lg p-3 text-center shadow-lg relative group border border-white/10">
-      <div className="font-bold text-lg" style={{ color: accentColor }}>
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+      className="relative w-full bg-black/30 backdrop-blur-md rounded-2xl p-4 text-center shadow-lg group border border-white/10"
+    >
+      <div className="relative w-24 h-24 mx-auto -mt-12">
+        <img
+          src={player.image_path}
+          alt={player.name}
+          className="w-full h-full object-cover rounded-full"
+        />
+        {onAction && (
+          <button
+            onClick={onAction}
+            className="absolute -top-1 -right-1 text-white bg-gray-700 hover:bg-green-500 rounded-full w-8 h-8 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"
+          >
+            {actionIcon}
+          </button>
+        )}
+      </div>
+      <div
+        className="font-bold text-lg mt-3 leading-tight truncate"
+        style={{ color: accentColor }}
+      >
         {player.name}
       </div>
-      <div className="text-gray-300 text-sm">{player.role}</div>
-      {player.soldPrice > 0 && (
-        <div className="text-green-400 font-semibold text-sm mt-1">
-          {formatCurrency(player.soldPrice)}
-        </div>
-      )}
-      <div
-        className={`text-xs font-semibold px-2 py-1 mt-2 rounded-full inline-block ${
-          player.nationality === "Overseas" ? "bg-blue-500" : "bg-green-500"
-        }`}
-      >
-        {player.nationality}
-      </div>
-
-      {onAction && (
-        <button
-          onClick={onAction}
-          className="absolute top-2 right-2 text-white bg-gray-600 hover:bg-green-600 rounded-full w-6 h-6 flex items-center justify-center transition-colors"
-        >
-          {actionIcon}
-        </button>
-      )}
+      <p className="text-sm text-gray-400">
+        {formatCurrency(player.soldPrice)}
+      </p>
 
       {isCaptain && (
         <div
@@ -120,7 +147,7 @@ const PlayerCard = memo(function PlayerCard({
       )}
 
       {onSetCaptain && (
-        <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onSetCaptain}
             title="Set as Captain"
@@ -137,9 +164,98 @@ const PlayerCard = memo(function PlayerCard({
           </button>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 });
+
+const ThreeJSCanvas = () => {
+  const mountRef = useRef(null);
+  useEffect(() => {
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
+    let scene,
+      camera,
+      renderer,
+      particles,
+      mouseX = 0,
+      mouseY = 0;
+
+    const init = () => {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(
+        75,
+        currentMount.clientWidth / currentMount.clientHeight,
+        0.1,
+        1000
+      );
+      camera.position.z = 5;
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      currentMount.appendChild(renderer.domElement);
+
+      const particleCount = 5000;
+      const positions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount * 3; i++) {
+        positions[i] = (Math.random() - 0.5) * 15;
+      }
+      const particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+      );
+      const particleMaterial = new THREE.PointsMaterial({
+        color: 0x4488ff,
+        size: 0.015,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      particles = new THREE.Points(particleGeometry, particleMaterial);
+      scene.add(particles);
+
+      animate();
+    };
+
+    const animate = () => {
+      requestAnimationFrame(animate);
+      particles.rotation.y += 0.0001;
+      camera.position.x += (mouseX - camera.position.x) * 0.02;
+      camera.position.y += (-mouseY - camera.position.y) * 0.02;
+      camera.lookAt(scene.position);
+      renderer.render(scene, camera);
+    };
+
+    const onWindowResize = () => {
+      if (!currentMount) return;
+      camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+    };
+    const onMouseMove = (event) => {
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseY = (event.clientY / window.innerHeight) * 2 - 1;
+    };
+    window.addEventListener("resize", onWindowResize);
+    window.addEventListener("mousemove", onMouseMove);
+    init();
+
+    return () => {
+      window.removeEventListener("resize", onWindowResize);
+      window.removeEventListener("mousemove", onMouseMove);
+      if (currentMount && renderer.domElement) {
+        currentMount.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+  return (
+    <div
+      ref={mountRef}
+      className="fixed top-0 left-0 w-full h-full -z-10 bg-gradient-to-br from-gray-900 via-black to-blue-900/50"
+    />
+  );
+};
 
 // --- Main TeamSubmissionPage Component ---
 export default function TeamSubmissionPage() {
@@ -318,23 +434,19 @@ export default function TeamSubmissionPage() {
   }
 
   return (
-    <div
-      className="min-h-screen p-4 md:p-8 text-white"
-      style={{
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${myTeam.colorPrimary}, ${myTeam.colorAccent})`,
-        backgroundSize: "cover",
-        backgroundAttachment: "fixed",
-      }}
-    >
-      {notification && (
-        <Notification
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification(null)}
-        />
-      )}
-      <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+    <div className="min-h-screen p-4 md:p-8 text-white">
+      <ThreeJSCanvas />
+      <AnimatePresence>
+        {notification && (
+          <Notification
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification(null)}
+          />
+        )}
+      </AnimatePresence>
+      <div className="max-w-screen-2xl mx-auto relative z-10">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
             <h1
               className="text-4xl font-bold"
@@ -372,25 +484,30 @@ export default function TeamSubmissionPage() {
             </Link>
           </div>
         </header>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-8">
-            <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-              <h2
-                className="text-2xl font-semibold mb-4"
-                style={{ color: myTeam.colorAccent }}
-              >
-                Available Players ({availablePlayers.length})
-              </h2>
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  placeholder="Search players..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-64 overflow-y-auto pr-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="lg:col-span-1 bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10"
+          >
+            <h2
+              className="text-2xl font-semibold mb-4"
+              style={{ color: myTeam.colorAccent }}
+            >
+              Available Players ({availablePlayers.length})
+            </h2>
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Search players..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-14 h-[calc(100vh-25rem)] overflow-y-auto pr-2 pt-12">
+              <AnimatePresence>
                 {availablePlayers.map((p) => (
                   <PlayerCard
                     key={p._id}
@@ -400,9 +517,16 @@ export default function TeamSubmissionPage() {
                     actionIcon="+"
                   />
                 ))}
-              </div>
+              </AnimatePresence>
             </div>
-            <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
+          </motion.div>
+          <div className="lg:col-span-2 space-y-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10"
+            >
               <h2
                 className="text-2xl font-semibold mb-4"
                 style={{ color: myTeam.colorAccent }}
@@ -410,47 +534,56 @@ export default function TeamSubmissionPage() {
                 Final Squad ({squad.length}/{tournament.maxSquadSize})
               </h2>
               <p className="text-sm text-gray-400 mb-4">
-                Click player to move to Playing XI. Min players:{" "}
+                Click `&gt;` to add to Playing XI. Min players:{" "}
                 {tournament.minSquadSize}
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-64 overflow-y-auto pr-2">
-                {squadWithoutXI.map((p) => (
-                  <PlayerCard
-                    key={p._id}
-                    player={p}
-                    accentColor={myTeam.colorAccent}
-                    onAction={() => moveToXI(p)}
-                    actionIcon=">"
-                  />
-                ))}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-14 min-h-[22rem] overflow-y-auto pr-2 pt-12">
+                <AnimatePresence>
+                  {squadWithoutXI.map((p) => (
+                    <PlayerCard
+                      key={p._id}
+                      player={p}
+                      accentColor={myTeam.colorAccent}
+                      onAction={() => moveToXI(p)}
+                      actionIcon=">"
+                    />
+                  ))}
+                </AnimatePresence>
               </div>
-            </div>
-          </div>
-          <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-            <h2
-              className="text-2xl font-semibold mb-4"
-              style={{ color: myTeam.colorAccent }}
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/10"
             >
-              Playing XI ({playingXI.length}/11)
-            </h2>
-            <p className="text-sm text-gray-400 mb-4">
-              Click player to move back to Squad. Hover for C/VC.
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-[36rem] overflow-y-auto pr-2">
-              {playingXI.map((p) => (
-                <PlayerCard
-                  key={p._id}
-                  player={p}
-                  accentColor={myTeam.colorAccent}
-                  onAction={() => moveFromXI(p)}
-                  actionIcon="<"
-                  isCaptain={captain?._id === p._id}
-                  isVC={viceCaptain?._id === p._id}
-                  onSetCaptain={() => setPlayerAsCaptain(p)}
-                  onSetViceCaptain={() => setPlayerAsViceCaptain(p)}
-                />
-              ))}
-            </div>
+              <h2
+                className="text-2xl font-semibold mb-4"
+                style={{ color: myTeam.colorAccent }}
+              >
+                Playing XI ({playingXI.length}/11)
+              </h2>
+              <p className="text-sm text-gray-400 mb-4">
+                Click `&lt;` to remove. Hover to set C/VC.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-14 min-h-[22rem] overflow-y-auto pr-2 pt-12">
+                <AnimatePresence>
+                  {playingXI.map((p) => (
+                    <PlayerCard
+                      key={p._id}
+                      player={p}
+                      accentColor={myTeam.colorAccent}
+                      onAction={() => moveFromXI(p)}
+                      actionIcon="<"
+                      isCaptain={captain?._id === p._id}
+                      isVC={viceCaptain?._id === p._id}
+                      onSetCaptain={() => setPlayerAsCaptain(p)}
+                      onSetViceCaptain={() => setPlayerAsViceCaptain(p)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </motion.div>
           </div>
         </div>
       </div>

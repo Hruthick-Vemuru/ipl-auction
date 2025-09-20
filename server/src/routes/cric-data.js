@@ -12,20 +12,39 @@ const r = Router();
 const API_BASE = "https://cricket.sportmonks.com/api/v2.0";
 
 const fetchFromApi = async (path) => {
+  if (!SPORTMONKS_API_TOKEN) {
+    throw new Error(
+      "SPORTMONKS_API_TOKEN is not defined in your environment variables. Please add it to your .env file."
+    );
+  }
   const url = `${API_BASE}${path}${
     path.includes("?") ? "&" : "?"
   }api_token=${SPORTMONKS_API_TOKEN}`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error("SPORTMONKS API ERROR:", {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorBody,
-    });
-    throw new Error("Failed to fetch data from SportMonks API.");
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("SPORTMONKS API ERROR:", {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+      });
+      throw new Error(
+        `Failed to fetch data from SportMonks API. Status: ${response.status}`
+      );
+    }
+    return response.json();
+  } catch (error) {
+    console.error(
+      `[CRIC-DATA FETCH ERROR] Failed to fetch from ${url}. Reason:`,
+      error
+    );
+    throw new Error(
+      `The server could not connect to the cricket data API. Please check the server's network connection, firewall settings, and ensure your API token is valid.`
+    );
   }
-  return response.json();
 };
 
 r.get("/players/search/:name", auth, async (req, res) => {
@@ -37,6 +56,8 @@ r.get("/players/search/:name", auth, async (req, res) => {
     );
     res.json(data.data);
   } catch (e) {
+    // This will now catch the more descriptive error from fetchFromApi
+    console.error("Player search failed:", e);
     res.status(500).json({ error: e.message });
   }
 });

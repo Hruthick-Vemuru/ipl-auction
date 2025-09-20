@@ -33,6 +33,7 @@ const playerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-playerSchema.index({ name: 1, admin: 1 }, { unique: true });
+// The unique index has been removed to allow for tournament-specific uniqueness.
+// playerSchema.index({ name: 1, admin: 1 }, { unique: true });
 
 export default mongoose.model("Player", playerSchema);

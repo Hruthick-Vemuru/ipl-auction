@@ -8,6 +8,79 @@ import * as THREE from "three";
 import { motion, AnimatePresence } from "framer-motion";
 import anime from "animejs";
 
+// --- NEW: Celebration Component ---
+const SoldCelebration = ({ player, team, onComplete }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 7000); // Auto-dismiss after 7 seconds
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  const confetti = Array.from({ length: 100 });
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/80 backdrop-blur-md"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 1 } }}
+    >
+      <div className="absolute inset-0 overflow-hidden">
+        {confetti.map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute"
+            style={{
+              width: Math.random() * 10 + 5,
+              height: Math.random() * 10 + 5,
+              background: i % 2 === 0 ? team.colorPrimary : team.colorAccent,
+              top: `${Math.random() * -50}%`,
+              left: `${Math.random() * 100}%`,
+            }}
+            animate={{
+              y: "120vh",
+              x: Math.random() * 200 - 100,
+              rotate: Math.random() * 360,
+            }}
+            transition={{
+              duration: Math.random() * 3 + 4,
+              ease: "linear",
+              repeat: Infinity,
+              delay: Math.random() * 2,
+            }}
+          />
+        ))}
+      </div>
+
+      <motion.div
+        className="text-center flex flex-col items-center"
+        initial={{ scale: 0.5, y: 100 }}
+        animate={{ scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 100, damping: 15 }}
+      >
+        <img
+          src={player.image_path}
+          alt={player.name}
+          className="w-64 h-64 rounded-full border-8 border-yellow-400 object-cover shadow-2xl"
+        />
+        <h2
+          className="text-6xl font-bold mt-4"
+          style={{ color: team.colorAccent }}
+        >
+          {player.name}
+        </h2>
+        <p className="text-4xl font-semibold text-green-400 mt-2">
+          {formatCurrency(player.soldPrice)}
+        </p>
+        <p className="text-2xl text-white mt-2">SOLD TO</p>
+        <div className="flex items-center gap-4 mt-2">
+          <img src={team.logo} alt={team.name} className="h-16" />
+          <h3 className="text-4xl font-bold">{team.name}</h3>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 // --- Reusable Notification Component ---
 const Notification = memo(function Notification({ message, type, onClose }) {
   useEffect(() => {
@@ -480,6 +553,7 @@ export default function LiveAuctionPage() {
   const socketRef = useRef(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const [celebrationData, setCelebrationData] = useState(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -510,9 +584,13 @@ export default function LiveAuctionPage() {
     socketRef.current.on("pools_update", (updatedPools) =>
       setPools(updatedPools)
     );
-    socketRef.current.on("auction_notification", (data) =>
-      setNotification(data)
-    );
+    socketRef.current.on("auction_notification", (data) => {
+      if (data.type === "sold") {
+        setCelebrationData({ player: data.player, team: data.team });
+      } else {
+        setNotification(data);
+      }
+    });
 
     return () => socketRef.current.disconnect();
   }, [tournamentId, router]);
@@ -569,10 +647,7 @@ export default function LiveAuctionPage() {
           soldToTeamId,
           pricePayload
         );
-        setNotification({
-          message: `${currentPlayer.name} sold successfully!`,
-          type: "success",
-        });
+        // The celebration will be triggered by the socket event, so no local notification is needed here.
         setSoldToTeamId("");
       } catch (e) {
         setNotification({ message: "Error: " + e.message, type: "error" });
@@ -608,6 +683,15 @@ export default function LiveAuctionPage() {
   return (
     <div className="min-h-screen text-white flex flex-col overflow-hidden">
       <ThreeJSCanvas />
+      <AnimatePresence>
+        {celebrationData && (
+          <SoldCelebration
+            player={celebrationData.player}
+            team={celebrationData.team}
+            onComplete={() => setCelebrationData(null)}
+          />
+        )}
+      </AnimatePresence>
       <Notification
         message={notification?.message}
         type={notification?.type}

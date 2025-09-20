@@ -17,7 +17,10 @@ const Notification = memo(function Notification({
     return () => clearTimeout(timer);
   }, [onClose, message]);
 
-  const bgColor = type === "error" ? "bg-red-600" : "bg-blue-600";
+  const bgColor =
+    type === "error"
+      ? "bg-red-500/20 border-red-500"
+      : "bg-blue-500/20 border-blue-500";
 
   return (
     <motion.div
@@ -25,7 +28,7 @@ const Notification = memo(function Notification({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
       transition={{ duration: 0.3 }}
-      className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 ${bgColor} flex items-center`}
+      className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg text-white text-sm z-50 border ${bgColor} flex items-center`}
     >
       {message}
       <button

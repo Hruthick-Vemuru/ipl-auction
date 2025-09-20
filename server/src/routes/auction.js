@@ -122,20 +122,22 @@ r.post("/sell", auth, async (req, res) => {
         (p) => p.nationality.toLowerCase() !== "indian"
       ).length;
       if (overseasCount >= tournament.maxOverseasPlayers) {
-        return res
-          .status(400)
-          .json({
-            error: `${team.name} has reached the overseas player limit.`,
-          });
+        return res.status(400).json({
+          error: `${team.name} has reached the overseas player limit.`,
+        });
       }
     }
 
     // Database Updates
-    await Player.findByIdAndUpdate(playerId, {
-      status: "Sold",
-      soldPrice: priceAmount,
-      soldTo: teamId,
-    });
+    const updatedPlayer = await Player.findByIdAndUpdate(
+      playerId,
+      {
+        status: "Sold",
+        soldPrice: priceAmount,
+        soldTo: teamId,
+      },
+      { new: true }
+    );
     await Tournament.updateOne(
       { _id: tournamentId, "teams._id": teamId },
       {
@@ -171,10 +173,12 @@ r.post("/sell", auth, async (req, res) => {
       updatedTournamentForBroadcast.pools
     );
     io.to(tournamentId).emit("auction_notification", {
+      type: "sold",
+      player: updatedPlayer.toObject(),
+      team: team.toObject(),
       message: `${player.name} sold to ${team.name} for ${formatCurrency(
         priceAmount
       )}`,
-      type: "success",
     });
 
     updateAndBroadcastState(io, tournamentId, {
