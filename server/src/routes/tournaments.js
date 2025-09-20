@@ -54,8 +54,16 @@ r.post("/:tournamentId/teams", auth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   try {
     const { tournamentId } = req.params;
-    const { name, username, password, colorPrimary, colorAccent, purse } =
-      req.body;
+    const {
+      name,
+      username,
+      password,
+      colorPrimary,
+      colorAccent,
+      purse,
+      logo,
+      shortName,
+    } = req.body;
 
     const tournament = await Tournament.findById(tournamentId);
     if (!tournament)
@@ -80,6 +88,8 @@ r.post("/:tournamentId/teams", auth, async (req, res) => {
       colorAccent,
       purseRemaining: purseAmount,
       players: [],
+      logo,
+      shortName,
     };
 
     tournament.teams.push(newTeam);
@@ -118,8 +128,16 @@ r.put("/:tournamentId/teams/:teamId", auth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   try {
     const { tournamentId, teamId } = req.params;
-    const { name, username, password, colorPrimary, colorAccent, purse } =
-      req.body;
+    const {
+      name,
+      username,
+      password,
+      colorPrimary,
+      colorAccent,
+      purse,
+      logo,
+      shortName,
+    } = req.body;
 
     const tournament = await Tournament.findById(tournamentId);
     if (!tournament)
@@ -135,6 +153,8 @@ r.put("/:tournamentId/teams/:teamId", auth, async (req, res) => {
     team.colorPrimary = colorPrimary;
     team.colorAccent = colorAccent;
     team.purseRemaining = parseCurrency(purse);
+    team.logo = logo;
+    team.shortName = shortName;
 
     if (password) {
       team.passwordHash = await bcrypt.hash(password, 10);

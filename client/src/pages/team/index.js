@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { api, getToken, setToken } from "@/lib/api";
 import { io } from "socket.io-client";
-import { formatCurrency, getTextColorForBackground } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- Reusable Notification Component ---
@@ -30,67 +30,47 @@ const Notification = memo(function Notification({ message, type, onClose }) {
   );
 });
 
-// --- FINAL, RESPONSIVE PlayerCard Component ---
+// --- Modern, Responsive PlayerCard Component ---
 const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
-  // Function to determine the best font size class based on name length
-  const getNameSizeClass = (name) => {
-    if (name.length > 18) {
-      return "text-base"; // Smaller font for very long names
-    }
-    if (name.length > 12) {
-      return "text-lg"; // Medium font for medium names
-    }
-    return "text-xl"; // Larger font for shorter names
-  };
-
   return (
-    <div className="relative w-80 h-24 group transform transition-transform hover:scale-105">
-      {/* The shaped background */}
-      <div
-        className="absolute inset-0 bg-gray-800 bg-opacity-60 backdrop-blur-sm border border-gray-700 group-hover:bg-gray-700/80 transition-all duration-300"
-        style={{
-          clipPath: "polygon(0% 0%, 100% 0%, 90% 100%, 0% 100%)",
-        }}
-      />
-
-      {/* Content */}
-      <div className="relative flex items-center h-full p-2 text-white">
-        {/* Player Image */}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      whileHover={{ scale: 1.05, zIndex: 10, y: -5 }}
+      className="relative w-80 h-24 bg-black/40 backdrop-blur-md rounded-xl group overflow-hidden"
+    >
+      <div className="relative w-full h-full flex items-center p-3 gap-4">
         <img
           src={player.image_path}
           alt={player.name}
-          className="w-20 h-20 object-cover rounded-full flex-shrink-0 border-2"
-          style={{ borderColor: accentColor }}
+          className="w-20 h-20 rounded-full object-cover flex-shrink-0"
         />
-
-        {/* Player Info */}
-        <div className="ml-4 flex-grow overflow-hidden">
-          <p
-            className={`font-bold leading-tight truncate ${getNameSizeClass(
-              player.name
-            )}`}
-            style={{ color: accentColor }}
-          >
+        <div className="flex-grow text-center">
+          <p className="font-bold text-lg leading-tight text-white truncate">
             {player.name}
           </p>
           {player.soldPrice > 0 && (
-            <p className="text-green-400 font-semibold text-lg mt-1">
+            <p className="text-green-400 font-semibold text-xl mt-1">
               {formatCurrency(player.soldPrice)}
             </p>
           )}
         </div>
-
-        {/* Overseas Icon */}
         {player.nationality !== "Indian" && (
           <div
-            className="absolute top-2 right-4 text-2xl"
+            className="absolute top-2 right-2 text-xl"
             title="Overseas Player"
           >
             ✈️
           </div>
         )}
       </div>
-    </div>
+      {/* Accent line */}
+      <div
+        className="absolute bottom-0 left-0 w-full h-1 transition-all duration-300 group-hover:h-2"
+        style={{ backgroundColor: accentColor }}
+      ></div>
+    </motion.div>
   );
 });
 
@@ -99,7 +79,7 @@ const StatDisplay = ({ title, stats }) => {
   if (!stats || (!stats.batting && !stats.bowling)) return null;
 
   return (
-    <div className="bg-gray-900 p-3 rounded">
+    <div className="bg-gray-900/50 p-3 rounded-lg border border-white/10">
       <h4 className="font-bold text-blue-400 text-md mb-2">
         {title} Career Stats
       </h4>
@@ -266,6 +246,7 @@ export default function TeamDashboard() {
         theme: { primary: "#000", accent: "#FFF" },
         header: { name: "Loading...", purse: 0, accent: "#FFF" },
         isMyTeamView: true,
+        team: null,
       };
 
     const viewedTeam = allTeams.find((t) => t._id === activeTab);
@@ -274,10 +255,11 @@ export default function TeamDashboard() {
       return {
         theme: { primary: myTeam.colorPrimary, accent: myTeam.colorAccent },
         header: {
-          name: myTeam.name,
+          name: "Auction Room",
           purse: myTeam.purseRemaining,
           accent: myTeam.colorAccent,
         },
+        team: myTeam,
         isMyTeamView: true,
       };
     }
@@ -292,6 +274,7 @@ export default function TeamDashboard() {
         purse: viewedTeam.purseRemaining,
         accent: viewedTeam.colorAccent,
       },
+      team: viewedTeam,
       isMyTeamView: viewedTeam._id === myTeam._id,
     };
   }, [activeTab, allTeams, myTeam]);
@@ -500,13 +483,22 @@ export default function TeamDashboard() {
       <div className="max-w-7xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
-            <h1
-              className="text-5xl font-bold"
-              style={{ color: activeViewData.header.accent }}
-            >
-              {activeViewData.header.name}
-            </h1>
-            <p className="text-white text-opacity-80 text-lg">
+            <div className="flex items-center gap-4">
+              {activeViewData.team?.logo && (
+                <img
+                  src={activeViewData.team.logo}
+                  alt={activeViewData.team.name}
+                  className="w-16 h-16 object-contain"
+                />
+              )}
+              <h1
+                className="text-5xl font-bold"
+                style={{ color: activeViewData.header.accent }}
+              >
+                {activeViewData.team?.shortName || activeViewData.header.name}
+              </h1>
+            </div>
+            <p className="text-white text-opacity-80 text-lg mt-1">
               Purse Remaining: {formatCurrency(activeViewData.header.purse)}
             </p>
           </div>
@@ -590,13 +582,14 @@ export default function TeamDashboard() {
             <button
               key={t._id}
               onClick={() => setActiveTab(t._id)}
-              className={`px-4 py-2 font-semibold flex-shrink-0 transition-colors ${
+              className={`px-4 py-2 font-semibold flex items-center gap-2 flex-shrink-0 transition-colors ${
                 activeTab === t._id
                   ? "border-b-2 text-white border-white"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              {t._id === myTeam?._id ? "My Squad" : t.name}
+              {t.logo && <img src={t.logo} alt={t.name} className="w-5 h-5" />}
+              {t._id === myTeam?._id ? "My Squad" : t.shortName || t.name}
             </button>
           ))}
         </div>

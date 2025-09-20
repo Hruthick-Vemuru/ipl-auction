@@ -9,6 +9,8 @@ const teamSchema = new mongoose.Schema({
   colorAccent: { type: String },
   purseRemaining: { type: Number, default: 0 },
   players: [{ type: mongoose.Schema.Types.ObjectId, ref: "Player" }],
+  logo: { type: String },
+  shortName: { type: String },
 });
 
 // --- NEW: This is a SUB-DOCUMENT schema for Pools ---

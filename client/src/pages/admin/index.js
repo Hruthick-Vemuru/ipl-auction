@@ -234,6 +234,88 @@ const ThreeJSCanvas = () => {
   );
 };
 
+const CustomTeamSelect = ({ selectedTeam, onSelect, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const team = iplTeams.find((t) => t.name === selectedTeam);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-2 bg-white/5 border border-white/20 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex justify-between items-center"
+      >
+        {team ? (
+          <span className="flex items-center gap-2">
+            <img
+              src={team.logo}
+              alt={team.name}
+              className="w-6 h-6 object-contain"
+            />
+            {team.shortName}
+          </span>
+        ) : (
+          "Select an IPL Team"
+        )}
+        <svg
+          className={`w-5 h-5 transition-transform ${
+            isOpen ? "transform rotate-180" : ""
+          }`}
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.ul
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-10 w-full mt-1 bg-black/80 backdrop-blur-lg border border-white/10 rounded-md shadow-lg max-h-60 overflow-y-auto"
+          >
+            {iplTeams.map((team) => (
+              <li
+                key={team.name}
+                onClick={() => {
+                  onSelect(team.name);
+                  setIsOpen(false);
+                }}
+                className="p-2 hover:bg-blue-500/30 cursor-pointer flex items-center gap-2"
+              >
+                <img
+                  src={team.logo}
+                  alt={team.name}
+                  className="w-6 h-6 object-contain"
+                />
+                {team.name}
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [tournaments, setTournaments] = useState([]);
@@ -263,6 +345,7 @@ export default function AdminDashboard() {
     colorPrimary: "#0A2342",
     colorAccent: "#FFD700",
     logo: "",
+    shortName: "",
   });
 
   const handleLogout = useCallback(() => {
@@ -357,6 +440,7 @@ export default function AdminDashboard() {
       colorPrimary: "#0A2342",
       colorAccent: "#FFD700",
       logo: "",
+      shortName: "",
     });
     setSelectedIplTeam("");
   };
@@ -409,6 +493,7 @@ export default function AdminDashboard() {
       colorPrimary: team.colorPrimary,
       colorAccent: team.colorAccent,
       logo: team.logo || "",
+      shortName: team.shortName || "",
     });
     setActiveTab("custom");
   };
@@ -477,8 +562,7 @@ export default function AdminDashboard() {
       [e.target.name]: Number(e.target.value),
     }));
 
-  const handleIplTeamSelect = (e) => {
-    const teamName = e.target.value;
+  const handleIplTeamSelect = (teamName) => {
     setSelectedIplTeam(teamName);
     const team = iplTeams.find((t) => t.name === teamName);
     if (team) {
@@ -488,6 +572,7 @@ export default function AdminDashboard() {
         colorPrimary: team.colorPrimary,
         colorAccent: team.colorAccent,
         logo: team.logo,
+        shortName: team.shortName,
       }));
     }
   };
@@ -703,127 +788,133 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                {activeTab === "custom" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <input
-                      placeholder="Team Name"
-                      name="name"
-                      value={teamData.name}
-                      onChange={handleTeamFormChange}
-                      className="p-2 bg-white/5 border border-white/20 rounded-md"
-                    />
-                    <input
-                      placeholder="Team Username"
-                      name="username"
-                      value={teamData.username}
-                      onChange={handleTeamFormChange}
-                      className="p-2 bg-white/5 border border-white/20 rounded-md"
-                    />
-                    <input
-                      placeholder={
-                        isEditing ? "New Password (optional)" : "Team Password"
-                      }
-                      name="password"
-                      type="password"
-                      value={teamData.password}
-                      onChange={handleTeamFormChange}
-                      className="p-2 bg-white/5 border border-white/20 rounded-md"
-                    />
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">
-                        Initial Purse
-                      </label>
-                      <CurrencyInput
-                        value={teamData.purse.value}
-                        unit={teamData.purse.unit}
-                        onValueChange={handlePurseValueChange}
-                        onUnitChange={handlePurseUnitChange}
-                      />
-                    </div>
-                    <div className="sm:col-span-2 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {activeTab === "custom" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                        <input
+                          placeholder="Team Name"
+                          name="name"
+                          value={teamData.name}
+                          onChange={handleTeamFormChange}
+                          className="p-2 bg-white/5 border border-white/20 rounded-md"
+                        />
+                        <input
+                          placeholder="Team Username"
+                          name="username"
+                          value={teamData.username}
+                          onChange={handleTeamFormChange}
+                          className="p-2 bg-white/5 border border-white/20 rounded-md"
+                        />
+                        <input
+                          placeholder={
+                            isEditing
+                              ? "New Password (optional)"
+                              : "Team Password"
+                          }
+                          name="password"
+                          type="password"
+                          value={teamData.password}
+                          onChange={handleTeamFormChange}
+                          className="p-2 bg-white/5 border border-white/20 rounded-md"
+                        />
                         <div>
                           <label className="block text-sm text-gray-400 mb-1">
-                            Primary Color
+                            Initial Purse
                           </label>
-                          <input
-                            type="color"
-                            name="colorPrimary"
-                            value={teamData.colorPrimary}
-                            onChange={handleTeamFormChange}
-                            className="w-full h-10 p-1 bg-white/5 rounded-md border border-white/20"
+                          <CurrencyInput
+                            value={teamData.purse.value}
+                            unit={teamData.purse.unit}
+                            onValueChange={handlePurseValueChange}
+                            onUnitChange={handlePurseUnitChange}
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm text-gray-400 mb-1">
-                            Accent Color
-                          </label>
-                          <input
-                            type="color"
-                            name="colorAccent"
-                            value={teamData.colorAccent}
-                            onChange={handleTeamFormChange}
-                            className="w-full h-10 p-1 bg-white/5 rounded-md border border-white/20"
-                          />
+                        <div className="sm:col-span-2 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm text-gray-400 mb-1">
+                                Primary Color
+                              </label>
+                              <input
+                                type="color"
+                                name="colorPrimary"
+                                value={teamData.colorPrimary}
+                                onChange={handleTeamFormChange}
+                                className="w-full h-10 p-1 bg-white/5 rounded-md border border-white/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-400 mb-1">
+                                Accent Color
+                              </label>
+                              <input
+                                type="color"
+                                name="colorAccent"
+                                value={teamData.colorAccent}
+                                onChange={handleTeamFormChange}
+                                className="w-full h-10 p-1 bg-white/5 rounded-md border border-white/20"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm text-gray-400 mb-1">
+                              Live Gradient Preview
+                            </label>
+                            <div
+                              className="w-full h-20 rounded-lg flex items-center justify-center border border-white/10"
+                              style={{
+                                backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${teamData.colorPrimary}, ${teamData.colorAccent})`,
+                              }}
+                            >
+                              <span
+                                className="font-bold text-2xl tracking-wider"
+                                style={{
+                                  color: teamData.colorAccent,
+                                  textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
+                                }}
+                              >
+                                Team Preview
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                    )}
 
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">
-                          Live Gradient Preview
-                        </label>
-                        <div
-                          className="w-full h-20 rounded-lg flex items-center justify-center border border-white/10"
-                          style={{
-                            backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), linear-gradient(45deg, ${teamData.colorPrimary}, ${teamData.colorAccent})`,
-                          }}
-                        >
-                          <span
-                            className="font-bold text-2xl tracking-wider"
-                            style={{
-                              color: teamData.colorAccent,
-                              textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
-                            }}
-                          >
-                            Team Preview
-                          </span>
-                        </div>
+                    {activeTab === "ipl" && (
+                      <div className="space-y-4 mb-6">
+                        <CustomTeamSelect
+                          selectedTeam={selectedIplTeam}
+                          onSelect={handleIplTeamSelect}
+                        />
+                        <div className="mb-4" />
+                        <input
+                          placeholder="Team Username"
+                          name="username"
+                          value={teamData.username}
+                          onChange={handleTeamFormChange}
+                          className="p-2 bg-white/5 border border-white/20 rounded-md"
+                        />
+                        <div className="mb-4" />
+                        <input
+                          placeholder="Team Password"
+                          name="password"
+                          type="password"
+                          value={teamData.password}
+                          onChange={handleTeamFormChange}
+                          className="p-2 bg-white/5 border border-white/20 rounded-md"
+                        />
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "ipl" && (
-                  <div className="space-y-4 mb-6">
-                    <select
-                      onChange={handleIplTeamSelect}
-                      value={selectedIplTeam}
-                      className="w-full p-2 bg-white/5 border border-white/20 rounded-md"
-                    >
-                      <option value="">Select an IPL Team</option>
-                      {iplTeams.map((team) => (
-                        <option key={team.name} value={team.name}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      placeholder="Team Username"
-                      name="username"
-                      value={teamData.username}
-                      onChange={handleTeamFormChange}
-                      className="p-2 bg-white/5 border border-white/20 rounded-md"
-                    />
-                    <input
-                      placeholder="Team Password"
-                      name="password"
-                      type="password"
-                      value={teamData.password}
-                      onChange={handleTeamFormChange}
-                      className="p-2 bg-white/5 border border-white/20 rounded-md"
-                    />
-                  </div>
-                )}
+                    )}
+                  </motion.div>
+                </AnimatePresence>
 
                 <div className="flex gap-4">
                   <motion.button
@@ -853,89 +944,91 @@ export default function AdminDashboard() {
                   {selTournament.teams?.map((team) => (
                     <div
                       key={team._id}
-                      className="flex items-center justify-between p-3 rounded-lg group"
-                      style={{
-                        backgroundImage: `linear-gradient(to right, ${team.colorPrimary}, ${team.colorAccent})`,
-                      }}
+                      className="flex items-center justify-between bg-black/20 backdrop-blur-sm rounded-lg group overflow-hidden"
                     >
-                      <div className="flex items-center">
-                        {team.logo && (
-                          <img
-                            src={team.logo}
-                            alt={team.name}
-                            className="w-8 h-8 mr-3"
-                          />
-                        )}
+                      <div className="flex items-center w-full">
                         <div
-                          className="font-bold"
+                          className="w-1/3 h-16 flex items-center justify-center"
                           style={{
-                            color: getTextColorForBackground(team.colorPrimary),
+                            backgroundImage: `linear-gradient(to right, ${team.colorPrimary}, ${team.colorAccent})`,
+                            clipPath: "polygon(0 0, 100% 0, 85% 100%, 0% 100%)",
                           }}
                         >
-                          {team.name}
+                          <div className="flex items-center gap-2">
+                            {team.logo && (
+                              <img
+                                src={team.logo}
+                                alt={team.name}
+                                className="w-10 h-10 object-contain"
+                              />
+                            )}
+                            <div
+                              className="font-bold text-lg"
+                              style={{
+                                color: getTextColorForBackground(
+                                  team.colorPrimary
+                                ),
+                                textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
+                              }}
+                            >
+                              {team.name}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleImpersonate(team._id)}
-                          title="Impersonate Team"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{
-                            color: getTextColorForBackground(team.colorAccent),
-                          }}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
+                        <div className="flex-grow" />
+                        <div className="flex items-center gap-2 px-4">
+                          <button
+                            onClick={() => handleImpersonate(team._id)}
+                            title="Impersonate Team"
+                            className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
                           >
-                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                            <path
-                              fillRule="evenodd"
-                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleEditTeam(team)}
-                          title="Edit Team"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{
-                            color: getTextColorForBackground(team.colorAccent),
-                          }}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path
+                                fillRule="evenodd"
+                                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleEditTeam(team)}
+                            title="Edit Team"
+                            className="text-gray-400 hover:text-yellow-400 transition-colors opacity-0 group-hover:opacity-100"
                           >
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRequest("team", team)}
-                          title="Delete Team"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{
-                            color: getTextColorForBackground(team.colorAccent),
-                          }}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRequest("team", team)}
+                            title="Delete Team"
+                            className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                           >
-                            <path
-                              fillRule="evenodd"
-                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}

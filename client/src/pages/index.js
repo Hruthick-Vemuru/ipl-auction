@@ -38,7 +38,7 @@ export default function Home() {
           />
         </svg>
       ),
-      route: "/admin",
+      route: "/admin/login",
       description: "Manage auction settings and players",
     },
     {
@@ -60,7 +60,7 @@ export default function Home() {
           />
         </svg>
       ),
-      route: "/team",
+      route: "/team/login",
       description: "Manage your team and bidding strategy",
     },
     {
@@ -223,6 +223,14 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, type: "spring" }}
       >
+        <motion.img
+          src="https://www.iplt20.com/assets/images/ipl-logo-new-old.png"
+          alt="IPL Logo"
+          className="w-48 mx-auto mb-4"
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 120 }}
+        />
         <motion.h1
           className="text-4xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-500"
           initial={{ scale: 0.95 }}
