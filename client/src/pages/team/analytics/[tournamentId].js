@@ -15,14 +15,9 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, shortenName } from "@/lib/utils";
 import { io } from "socket.io-client";
-import {
-  motion,
-  AnimatePresence,
-  useScroll,
-  useTransform,
-} from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Enhanced Player Card with 3D effects and hover animations
 const PlayerCard = memo(function PlayerCard({ player, accentColor, index }) {
@@ -91,7 +86,7 @@ const PlayerCard = memo(function PlayerCard({ player, accentColor, index }) {
             />
           )}
           <p className="font-bold text-xl leading-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300 truncate drop-shadow-lg">
-            {player.name}
+            {shortenName(player.name)}
           </p>
         </motion.div>
 
@@ -527,29 +522,25 @@ export default function AnalyticsPage() {
   const bgAccent = myTeam?.colorAccent || "#D4AF37";
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      className="min-h-screen p-4 md:p-8 text-white overflow-hidden"
-      style={{
-        background: `linear-gradient(135deg, ${bgPrimary} 0%, ${bgAccent} 50%, ${bgPrimary} 100%)`,
-        backgroundSize: "400% 400%",
-        backgroundAttachment: "fixed",
-      }}
-    >
-      {/* Animated background */}
-      <motion.div
-        className="absolute inset-0"
-        animate={{
-          backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"],
-        }}
-        transition={{
-          duration: 15,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-      />
+    <div className="min-h-screen p-4 md:p-8 text-white overflow-hidden relative">
+      {/* Animated background using team colors */}
+      <div className="absolute inset-0 z-0">
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(135deg, ${bgPrimary} 0%, ${bgAccent} 100%)`,
+          }}
+          animate={{
+            backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "linear",
+          }}
+        />
+        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm"></div>
+      </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
         <motion.header
@@ -749,6 +740,6 @@ export default function AnalyticsPage() {
           )}
         </AnimatePresence>
       </div>
-    </motion.div>
+    </div>
   );
 }
