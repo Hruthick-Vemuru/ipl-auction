@@ -946,89 +946,87 @@ export default function AdminDashboard() {
                       key={team._id}
                       className="flex items-center justify-between bg-black/20 backdrop-blur-sm rounded-lg group overflow-hidden"
                     >
-                      <div className="flex items-center w-full">
-                        <div
-                          className="w-1/3 h-16 flex items-center justify-center"
-                          style={{
-                            backgroundImage: `linear-gradient(to right, ${team.colorPrimary}, ${team.colorAccent})`,
-                            clipPath: "polygon(0 0, 100% 0, 85% 100%, 0% 100%)",
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            {team.logo && (
-                              <img
-                                src={team.logo}
-                                alt={team.name}
-                                className="w-10 h-10 object-contain"
-                              />
-                            )}
-                            <div
-                              className="font-bold text-lg"
-                              style={{
-                                color: getTextColorForBackground(
-                                  team.colorPrimary
-                                ),
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
-                              }}
-                            >
-                              {team.name}
-                            </div>
+                      <div
+                        className="h-16 flex items-center px-6"
+                        style={{
+                          backgroundImage: `linear-gradient(to right, ${team.colorPrimary}, ${team.colorAccent})`,
+                          clipPath: "polygon(0 0, 100% 0, 90% 100%, 0% 100%)",
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {team.logo && (
+                            <img
+                              src={team.logo}
+                              alt={team.name}
+                              className="w-10 h-10 object-contain"
+                            />
+                          )}
+                          <div
+                            className="font-bold text-lg whitespace-nowrap"
+                            style={{
+                              color: getTextColorForBackground(
+                                team.colorPrimary
+                              ),
+                              textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
+                            }}
+                          >
+                            {team.name}
                           </div>
                         </div>
-                        <div className="flex-grow" />
-                        <div className="flex items-center gap-2 px-4">
-                          <button
-                            onClick={() => handleImpersonate(team._id)}
-                            title="Impersonate Team"
-                            className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+                      </div>
+
+                      <div className="flex items-center gap-2 px-4">
+                        <button
+                          onClick={() => handleImpersonate(team._id)}
+                          title="Impersonate Team"
+                          className="text-gray-400 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                              <path
-                                fillRule="evenodd"
-                                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleEditTeam(team)}
-                            title="Edit Team"
-                            className="text-gray-400 hover:text-yellow-400 transition-colors opacity-0 group-hover:opacity-100"
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path
+                              fillRule="evenodd"
+                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleEditTeam(team)}
+                          title="Edit Team"
+                          className="text-gray-400 hover:text-yellow-400 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRequest("team", team)}
-                            title="Delete Team"
-                            className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRequest("team", team)}
+                          title="Delete Team"
+                          className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
-                        </div>
+                            <path
+                              fillRule="evenodd"
+                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   ))}

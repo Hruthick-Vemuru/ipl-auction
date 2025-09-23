@@ -1,4 +1,3 @@
-// hruthick-vemuru/ipl-auction/ipl-auction-d7882c4de4b37b6a6b089a1c53fdf2223d8f3918/client/src/pages/team/index.js
 import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -156,29 +155,23 @@ const PlayerCard = memo(function PlayerCard({ player, accentColor }) {
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className="relative h-24 bg-gradient-to-b from-gray-900/80 to-gray-950/80 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-white/5 group hover:border-white/20 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 flex-shrink-0 max-w-xs"
     >
-      {/* Player Image with 3D effect */}
-      <div className="absolute -top-12 left-0 w-28 h-28">
+      <div className="absolute -top-8 left-0 w-24 h-24">
         <div className="relative w-full h-full z-10">
           <img
             src={player.image_path}
             alt={player.name}
             className="w-full h-full object-cover rounded-full shadow-xl"
           />
-          {/* Shine effect */}
           <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
         </div>
       </div>
 
-      {/* Player Info - Perfectly Aligned */}
       <div className="flex flex-col text-right items-end justify-center h-full pl-20">
-        <p
-          className="font-bold text-xl leading-tight text-white truncate"
-          style={{ color: accentColor }}
-        >
+        <p className="font-bold text-xl leading-tight text-transparent bg-clip-text bg-gradient-to-r from-gray-200 to-white truncate">
           {player.name}
         </p>
         {player.soldPrice > 0 && (
-          <p className="text-green-400 font-semibold text-2xl mt-1">
+          <p className="font-semibold text-2xl mt-1 text-emerald-400">
             {formatCurrency(player.soldPrice)}
           </p>
         )}
@@ -316,6 +309,8 @@ export default function TeamDashboard() {
   const [notification, setNotification] = useState(null);
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [celebrationData, setCelebrationData] = useState(null);
+
+  const [squadRoleTab, setSquadRoleTab] = useState("Batters");
 
   const handleLogout = useCallback(() => {
     setToken(null);
@@ -623,31 +618,50 @@ export default function TeamDashboard() {
         </div>
       );
     const { team, groupedPlayers } = displayedTeamData;
+    const squadTabs = Object.keys(groupedPlayers);
 
     return (
-      <div className="space-y-10 bg-black/30 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-xl">
-        {Object.entries(groupedPlayers).map(
-          ([role, players]) =>
-            players.length > 0 && (
-              <div key={role}>
-                <h3
-                  className="text-3xl font-bold mb-6 text-center tracking-wider"
-                  style={{ color: team.colorAccent }}
-                >
-                  {role}
-                </h3>
-                <div className="flex flex-wrap gap-4 justify-center">
-                  {players.map((p) => (
-                    <PlayerCard
-                      key={p._id}
-                      player={p}
-                      accentColor={team.colorAccent}
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-        )}
+      <div className="bg-black/30 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-xl">
+        <div className="flex border-b border-gray-700 mb-4">
+          {squadTabs.map((tabName) => (
+            <button
+              key={tabName}
+              onClick={() => setSquadRoleTab(tabName)}
+              className={`px-4 py-2 font-semibold transition-colors ${
+                squadRoleTab === tabName
+                  ? "text-white border-b-2"
+                  : "text-gray-400 hover:text-white"
+              }`}
+              style={{
+                borderColor:
+                  squadRoleTab === tabName ? team.colorAccent : "transparent",
+              }}
+            >
+              {tabName} ({groupedPlayers[tabName].length})
+            </button>
+          ))}
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={squadRoleTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mt-6"
+          >
+            <div className="flex flex-wrap gap-4 justify-center">
+              {groupedPlayers[squadRoleTab].map((p) => (
+                <PlayerCard
+                  key={p._id}
+                  player={p}
+                  accentColor={team.colorAccent}
+                />
+              ))}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+
         {team.players.length === 0 && (
           <p className="text-center text-gray-400 py-10">
             This team has no players yet.
