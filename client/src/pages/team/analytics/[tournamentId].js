@@ -1,80 +1,350 @@
-/********************************************************************************
- * --- FILE: client/src/pages/team/analytics/[tournamentId].js (FINAL) ---
- ********************************************************************************/
-// FINAL VERSION: This page has been completely rewritten and corrected.
-// - The "Cannot read properties of undefined" crash has been permanently fixed.
-// - Pie charts now correctly display percentages with readable white text.
-// - The entire component is robust and styled to a professional standard.
-
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { api, getToken } from "../../../lib/api";
+import { api, getToken } from "@/lib/api";
 import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   ResponsiveContainer,
   CartesianGrid,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
-import { formatCurrency } from "../../../lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { io } from "socket.io-client";
+import {
+  motion,
+  AnimatePresence,
+  useScroll,
+  useTransform,
+} from "framer-motion";
 
-// --- Reusable "Glassmorphism" Hexagonal PlayerCard ---
-const PlayerCard = ({ player, accentColor }) => {
+// Enhanced Player Card with 3D effects and hover animations
+const PlayerCard = memo(function PlayerCard({ player, accentColor, index }) {
   return (
-    <div
-      className="relative w-56 h-14 flex items-center justify-center transition-transform hover:scale-110 group"
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 40, scale: 0.9, rotateX: -15 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        rotateX: 0,
+        transition: {
+          type: "spring",
+          stiffness: 300,
+          damping: 25,
+          delay: index * 0.1,
+        },
+      }}
+      whileHover={{
+        y: -8,
+        scale: 1.02,
+        rotateY: 5,
+        transition: { type: "spring", stiffness: 400, damping: 10 },
+      }}
+      exit={{ opacity: 0, y: -20, scale: 0.9 }}
+      className="relative h-28 w-72 bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90 backdrop-blur-xl rounded-3xl p-5 shadow-2xl border border-white/10 hover:border-white/30 transition-all duration-500 group perspective-1000 flex-shrink-0"
       style={{
-        clipPath: "polygon(7% 0%, 93% 0%, 100% 50%, 93% 100%, 7% 100%, 0% 50%)",
+        background: `linear-gradient(135deg, rgba(30, 30, 30, 0.9) 0%, rgba(50, 50, 50, 0.7) 50%, rgba(30, 30, 30, 0.9) 100%)`,
+        transformStyle: "preserve-3d",
       }}
     >
+      {/* Animated background gradient */}
+      <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+      {/* Glow effect */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm group-hover:bg-black/70 transition-colors border border-white/10"
-        style={{
-          clipPath:
-            "polygon(7% 0%, 93% 0%, 100% 50%, 93% 100%, 7% 100%, 0% 50%)",
-        }}
-      ></div>
-      <div className="relative z-10 text-center p-2 w-full">
-        {player.nationality === "Overseas" && (
-          <div
-            className="absolute top-1 right-5 text-lg"
-            title="Overseas Player"
-          >
-            ✈️
-          </div>
-        )}
-        <div
-          className="font-bold text-base leading-tight truncate"
-          style={{ color: accentColor }}
+        className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-30 blur-xl transition-all duration-500"
+        style={{ background: accentColor }}
+      />
+
+      <div className="absolute -top-10 left-4 w-28 h-28 transform-gpu">
+        <motion.div
+          className="relative w-full h-full z-20"
+          whileHover={{ scale: 1.1, rotate: 5 }}
+          transition={{ type: "spring", stiffness: 300 }}
         >
-          {player.name}
-        </div>
+          <img
+            src={player.image_path}
+            alt={player.name}
+            className="w-full h-full object-cover rounded-2xl shadow-2xl border-2 border-white/20"
+          />
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        </motion.div>
+      </div>
+
+      <div className="flex flex-col text-right items-end justify-center h-full pl-24">
+        <motion.div className="flex items-center gap-3" whileHover={{ x: -5 }}>
+          {player.teamLogo && (
+            <motion.img
+              src={player.teamLogo}
+              alt={player.teamName}
+              className="w-7 h-7 object-contain rounded-full border border-white/20"
+              whileHover={{ scale: 1.2, rotate: 360 }}
+              transition={{ duration: 0.5 }}
+            />
+          )}
+          <p className="font-bold text-xl leading-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300 truncate drop-shadow-lg">
+            {player.name}
+          </p>
+        </motion.div>
+
         {player.soldPrice > 0 && (
-          <div className="text-green-400 font-semibold text-xs mt-1">
+          <motion.p
+            className="font-bold text-2xl mt-2 bg-gradient-to-r from-emerald-400 to-cyan-400 text-transparent bg-clip-text drop-shadow-lg"
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", delay: index * 0.1 + 0.2 }}
+          >
             {formatCurrency(player.soldPrice)}
-          </div>
+          </motion.p>
         )}
       </div>
-    </div>
-  );
-};
 
-// --- REWRITTEN Helper Functions for Data Analysis ---
+      {player.nationality !== "Indian" && (
+        <motion.div
+          className="absolute top-3 right-3 text-2xl"
+          title="Overseas Player"
+          whileHover={{ scale: 1.3, rotate: 15 }}
+          animate={{
+            y: [0, -5, 0],
+            transition: {
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut",
+            },
+          }}
+        >
+          ✈️
+        </motion.div>
+      )}
+
+      {/* Role badge */}
+      <motion.div
+        className="absolute bottom-3 left-3 px-2 py-1 rounded-full text-xs font-semibold bg-black/40 backdrop-blur-sm border border-white/10"
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: index * 0.1 + 0.3 }}
+      >
+        {player.role}
+      </motion.div>
+    </motion.div>
+  );
+});
+
+// Enhanced Chart Components with animations
+const AnimatedPieChart = memo(({ data, colors, title, height = 300 }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 30 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6 }}
+    className="relative"
+  >
+    <ResponsiveContainer width="100%" height={height}>
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          outerRadius={80}
+          innerRadius={40}
+          paddingAngle={2}
+          fill="#8884d8"
+          labelLine={false}
+          label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+        >
+          {data.map((entry, index) => (
+            <Cell
+              key={`cell-${index}`}
+              fill={colors[index % colors.length]}
+              stroke="rgba(255,255,255,0.3)"
+              strokeWidth={2}
+            />
+          ))}
+        </Pie>
+        <Tooltip
+          formatter={(value) => formatCurrency(value)}
+          contentStyle={{
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: "12px",
+            backdropFilter: "blur(10px)",
+          }}
+        />
+        <Legend
+          wrapperStyle={{
+            color: "#E2E8F0",
+            fontSize: "12px",
+          }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+
+    {/* Floating particles background */}
+    <div className="absolute inset-0 pointer-events-none">
+      {[...Array(5)].map((_, i) => (
+        <motion.div
+          key={i}
+          className="absolute w-2 h-2 rounded-full bg-white/10"
+          style={{
+            top: `${20 + i * 15}%`,
+            left: `${10 + i * 20}%`,
+          }}
+          animate={{
+            y: [0, -10, 0],
+            opacity: [0.3, 0.7, 0.3],
+          }}
+          transition={{
+            duration: 3 + i,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  </motion.div>
+));
+
+const AnimatedBarChart = memo(({ data, height = 500 }) => (
+  <motion.div
+    initial={{ opacity: 0, x: -30 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ duration: 0.8 }}
+  >
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ left: 20, right: 30, top: 20, bottom: 20 }}
+      >
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="rgba(255, 255, 255, 0.1)"
+          horizontal={true}
+          vertical={false}
+        />
+        <XAxis
+          type="number"
+          tickFormatter={(value) => `${value / 10000000} Cr`}
+          stroke="#94A3B8"
+          tick={{ fill: "#94A3B8", fontSize: 12 }}
+          axisLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={120}
+          stroke="#94A3B8"
+          tick={{ fill: "#94A3B8", fontSize: 12 }}
+          axisLine={false}
+        />
+        <Tooltip
+          formatter={(value) => formatCurrency(value)}
+          cursor={{ fill: "rgba(255, 255, 255, 0.05)" }}
+          contentStyle={{
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: "12px",
+            backdropFilter: "blur(10px)",
+          }}
+        />
+        <Legend
+          wrapperStyle={{
+            color: "#E2E8F0",
+            fontSize: "12px",
+          }}
+        />
+        <Bar
+          dataKey="roleSpend.Batters"
+          stackId="a"
+          fill="#0088FE"
+          name="Batters"
+          radius={[0, 4, 4, 0]}
+        />
+        <Bar
+          dataKey="roleSpend.Allrounders"
+          stackId="a"
+          fill="#00C49F"
+          name="Allrounders"
+          radius={[0, 4, 4, 0]}
+        />
+        <Bar
+          dataKey="roleSpend.Bowlers"
+          stackId="a"
+          fill="#FFBB28"
+          name="Bowlers"
+          radius={[0, 4, 4, 0]}
+        />
+        <Bar
+          dataKey="roleSpend.Wicketkeepers"
+          stackId="a"
+          fill="#FF8042"
+          name="Wicketkeepers"
+          radius={[0, 4, 4, 0]}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  </motion.div>
+));
+
+// Enhanced Tab Component
+const TabButton = memo(({ active, onClick, children }) => (
+  <motion.button
+    onClick={onClick}
+    className={`relative px-6 py-3 font-semibold rounded-t-xl transition-all duration-300 ${
+      active ? "text-white" : "text-gray-400 hover:text-gray-300"
+    }`}
+    whileHover={{ y: -2 }}
+    whileTap={{ y: 0 }}
+  >
+    {children}
+    {active && (
+      <motion.div
+        className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500 to-purple-500"
+        layoutId="activeTab"
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      />
+    )}
+  </motion.button>
+));
+
+// Enhanced Loading Component
+const LoadingSpinner = memo(() => (
+  <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+    <motion.div
+      className="flex flex-col items-center gap-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      <motion.div
+        className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+      />
+      <motion.p
+        className="text-xl font-semibold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
+        animate={{ opacity: [0.5, 1, 0.5] }}
+        transition={{ duration: 2, repeat: Infinity }}
+      >
+        Loading Analytics...
+      </motion.p>
+    </motion.div>
+  </div>
+));
+
 const generateTeamAnalysis = (stats, limits) => {
-  // This function now correctly checks for `stats.squad`
   if (!stats || !stats.squad || stats.squad.length === 0) {
     return "No players purchased yet. Analysis will be available after the auction.";
   }
 
-  // It now correctly reduces over `stats.squad`
   const battingSpend = stats.squad.reduce((sum, p) => {
     if (p.role === "Batter" || p.role === "Wicketkeeper")
       return sum + p.soldPrice;
@@ -121,10 +391,16 @@ const generateTeamAnalysis = (stats, limits) => {
   return `${roleAnalysis} ${nationAnalysis}`;
 };
 
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
-const NATION_COLORS = ["#FF8042", "#0088FE"];
+const COLORS = [
+  "#0088FE",
+  "#00C49F",
+  "#FFBB28",
+  "#FF8042",
+  "#8884D8",
+  "#82CA9D",
+];
+const NATION_COLORS = ["#FF8042", "#0088FE", "#00C49F", "#FFBB28"];
 
-// --- Main Analytics Page Component ---
 export default function AnalyticsPage() {
   const router = useRouter();
   const { tournamentId } = router.query;
@@ -187,6 +463,7 @@ export default function AnalyticsPage() {
           ...p,
           teamAccent: team.colorAccent,
           teamName: team.name,
+          teamLogo: team.logo,
         })
       );
       const totalSpend = team.players.reduce((sum, p) => sum + p.soldPrice, 0);
@@ -209,29 +486,18 @@ export default function AnalyticsPage() {
       };
     });
 
-    const findTopBuy = (role, nationality) => {
+    const findTopBuysByRole = (role) => {
       return allPlayers
-        .filter((p) => p.role === role && p.nationality === nationality)
-        .sort((a, b) => b.soldPrice - a.soldPrice)[0];
+        .filter((p) => p.role === role)
+        .sort((a, b) => b.soldPrice - a.soldPrice)
+        .slice(0, 5);
     };
 
     const topBuys = {
-      Batters: {
-        Indian: findTopBuy("Batter", "Indian"),
-        Overseas: findTopBuy("Batter", "Overseas"),
-      },
-      Bowlers: {
-        Indian: findTopBuy("Bowler", "Indian"),
-        Overseas: findTopBuy("Bowler", "Overseas"),
-      },
-      Allrounders: {
-        Indian: findTopBuy("Allrounder", "Indian"),
-        Overseas: findTopBuy("Allrounder", "Overseas"),
-      },
-      Wicketkeepers: {
-        Indian: findTopBuy("Wicketkeeper", "Indian"),
-        Overseas: findTopBuy("Wicketkeeper", "Overseas"),
-      },
+      Batters: findTopBuysByRole("Batter"),
+      Bowlers: findTopBuysByRole("Bowler"),
+      Allrounders: findTopBuysByRole("Allrounder"),
+      Wicketkeepers: findTopBuysByRole("Wicketkeeper"),
     };
 
     const myData = allStats.find((stats) => stats.name === myTeam.name);
@@ -254,287 +520,235 @@ export default function AnalyticsPage() {
     : [];
 
   if (isLoading || !myTeam || !tournamentData) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        Loading Analytics...
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
+  const bgPrimary = myTeam?.colorPrimary || "#111827";
+  const bgAccent = myTeam?.colorAccent || "#D4AF37";
+
   return (
-    <div
-      className="min-h-screen p-4 md:p-8 text-white"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      className="min-h-screen p-4 md:p-8 text-white overflow-hidden"
       style={{
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), linear-gradient(45deg, ${myTeam.colorPrimary}, ${myTeam.colorAccent})`,
-        backgroundSize: "cover",
+        background: `linear-gradient(135deg, ${bgPrimary} 0%, ${bgAccent} 50%, ${bgPrimary} 100%)`,
+        backgroundSize: "400% 400%",
         backgroundAttachment: "fixed",
       }}
     >
-      <div className="max-w-7xl mx-auto">
-        <header className="flex justify-between items-center mb-6">
-          <h1
-            className="text-4xl font-bold"
-            style={{ color: myTeam.colorAccent }}
-          >
-            Live Auction Analysis
-          </h1>
-          <Link href="/team" className="text-blue-400 hover:underline">
-            &larr; Back to Dashboard
-          </Link>
-        </header>
+      {/* Animated background */}
+      <motion.div
+        className="absolute inset-0"
+        animate={{
+          backgroundPosition: ["0% 0%", "100% 100%", "0% 0%"],
+        }}
+        transition={{
+          duration: 15,
+          repeat: Infinity,
+          ease: "linear",
+        }}
+      />
 
-        <div className="flex border-b border-gray-700 mb-6">
-          <button
-            onClick={() => setActiveTab("my_team")}
-            className={`px-4 py-2 font-semibold ${
-              activeTab === "my_team"
-                ? "border-b-2 text-white border-white"
-                : "text-gray-400"
-            }`}
-          >
-            My Team Report
-          </button>
-          <button
-            onClick={() => setActiveTab("top_buys")}
-            className={`px-4 py-2 font-semibold ${
-              activeTab === "top_buys"
-                ? "border-b-2 text-white border-white"
-                : "text-gray-400"
-            }`}
-          >
-            Top Buys
-          </button>
-          <button
-            onClick={() => setActiveTab("league_comparison")}
-            className={`px-4 py-2 font-semibold ${
-              activeTab === "league_comparison"
-                ? "border-b-2 text-white border-white"
-                : "text-gray-400"
-            }`}
-          >
-            League Comparison
-          </button>
-        </div>
-
-        {myTeamAnalytics && myTeamAnalytics.squad.length === 0 ? (
-          <div className="text-center bg-black/30 backdrop-blur-sm p-12 rounded-lg border border-white/10">
-            <h2 className="text-3xl font-bold text-yellow-400">
-              Analysis Pending
-            </h2>
-            <p className="text-gray-400 mt-2">
-              Your team has not purchased any players yet.
-            </p>
-            <p className="text-gray-400">
-              This page will update in real-time as your squad is built during
-              the auction!
+      <div className="max-w-7xl mx-auto relative z-10">
+        <motion.header
+          className="flex justify-between items-center mb-8"
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent drop-shadow-2xl">
+              Live Auction Analysis
+            </h1>
+            <p className="text-gray-300 mt-2">
+              Real-time team performance insights
             </p>
           </div>
-        ) : (
-          <>
-            {activeTab === "my_team" && myTeamAnalytics && (
-              <div className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-                    <h2 className="text-2xl font-semibold mb-4 text-white">
-                      Spend by Role
-                    </h2>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={rolePieData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          fill="#8884d8"
-                          labelLine={false}
-                          label={({ name, percent }) =>
-                            `${(percent * 100).toFixed(0)}%`
-                          }
-                        >
-                          {rolePieData.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={COLORS[index % COLORS.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => formatCurrency(value)}
-                          contentStyle={{
-                            backgroundColor: "rgba(30, 41, 59, 0.9)",
-                            border: "1px solid #4A5568",
-                          }}
-                          itemStyle={{ color: "#E2E8F0" }}
-                          labelStyle={{ color: "#CBD5E0" }}
-                        />
-                        <Legend wrapperStyle={{ color: "#E2E8F0" }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-                    <h2 className="text-2xl font-semibold mb-4 text-white">
-                      Spend by Nationality
-                    </h2>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={nationPieData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          fill="#8884d8"
-                          labelLine={false}
-                          label={({ name, percent }) =>
-                            `${(percent * 100).toFixed(0)}%`
-                          }
-                        >
-                          {nationPieData.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={NATION_COLORS[index % NATION_COLORS.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => formatCurrency(value)}
-                          contentStyle={{
-                            backgroundColor: "rgba(30, 41, 59, 0.9)",
-                            border: "1px solid #4A5568",
-                          }}
-                          itemStyle={{ color: "#E2E8F0" }}
-                          labelStyle={{ color: "#CBD5E0" }}
-                        />
-                        <Legend wrapperStyle={{ color: "#E2E8F0" }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-                  <h2 className="text-2xl font-semibold mb-4 text-white">
-                    Team Analysis
-                  </h2>
-                  <p
-                    className="text-gray-300 italic"
-                    dangerouslySetInnerHTML={{
-                      __html: generateTeamAnalysis(
-                        myTeamAnalytics,
-                        tournamentData
-                      ).replace(
-                        /\*\*(.*?)\*\*/g,
-                        '<strong class="text-yellow-400">$1</strong>'
-                      ),
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Link
+              href="/team"
+              className="px-6 py-3 bg-black/30 backdrop-blur-md rounded-xl border border-white/10 hover:border-white/30 transition-all duration-300 flex items-center gap-2 group"
+            >
+              <span>←</span>
+              Back to Dashboard
+            </Link>
+          </motion.div>
+        </motion.header>
 
-            {activeTab === "top_buys" && (
-              <div className="space-y-10 bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-                {Object.entries(leagueTopBuys).map(
-                  ([role, players]) =>
-                    (players.Indian || players.Overseas) && (
-                      <div key={role}>
-                        <h3
-                          className="text-3xl font-bold mb-6 text-center tracking-wider"
-                          style={{ color: myTeam.colorAccent }}
-                        >
-                          Top {role}
-                        </h3>
-                        <div className="flex flex-wrap gap-x-8 gap-y-4 justify-center">
-                          {players.Indian && (
-                            <PlayerCard
-                              player={players.Indian}
-                              accentColor={players.Indian.teamAccent}
-                            />
-                          )}
-                          {players.Overseas && (
-                            <PlayerCard
-                              player={players.Overseas}
-                              accentColor={players.Overseas.teamAccent}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    )
-                )}
-              </div>
-            )}
+        {/* Enhanced Tab Navigation */}
+        <motion.nav
+          className="flex gap-2 mb-8 bg-black/20 backdrop-blur-md rounded-2xl p-2 border border-white/10"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <TabButton
+            active={activeTab === "my_team"}
+            onClick={() => setActiveTab("my_team")}
+          >
+            🏆 My Team Report
+          </TabButton>
+          <TabButton
+            active={activeTab === "top_buys"}
+            onClick={() => setActiveTab("top_buys")}
+          >
+            ⭐ Top Buys
+          </TabButton>
+          <TabButton
+            active={activeTab === "league_comparison"}
+            onClick={() => setActiveTab("league_comparison")}
+          >
+            📊 League Comparison
+          </TabButton>
+        </motion.nav>
 
-            {activeTab === "league_comparison" && (
-              <div className="bg-black/30 backdrop-blur-sm p-6 rounded-lg border border-white/10">
-                <h2 className="text-2xl font-semibold mb-4 text-white">
-                  League Spend Comparison by Role
-                </h2>
-                <ResponsiveContainer width="100%" height={500}>
-                  <BarChart
-                    data={allTeamStats}
-                    layout="vertical"
-                    margin={{ left: 20, right: 30 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255, 255, 255, 0.1)"
-                    />
-                    <XAxis
-                      type="number"
-                      tickFormatter={(value) => `${value / 10000000} Cr`}
-                      stroke="#A0AEC0"
-                      tick={{ fill: "#A0AEC0" }}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={100}
-                      stroke="#A0AEC0"
-                      tick={{ fill: "#A0AEC0" }}
-                    />
-                    <Tooltip
-                      formatter={(value) => formatCurrency(value)}
-                      cursor={{ fill: "rgba(255, 255, 255, 0.05)" }}
-                      contentStyle={{
-                        backgroundColor: "rgba(30, 41, 59, 0.9)",
-                        border: "1px solid #4A5568",
+        <AnimatePresence mode="wait">
+          {myTeamAnalytics && myTeamAnalytics.squad.length === 0 ? (
+            <motion.div
+              key="empty-state"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="text-center bg-black/30 backdrop-blur-xl p-12 rounded-3xl border border-white/10 shadow-2xl"
+            >
+              <motion.h2
+                className="text-4xl font-bold text-yellow-400 mb-4"
+                animate={{ y: [0, -5, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                Analysis Pending
+              </motion.h2>
+              <p className="text-gray-400 text-lg">
+                Your team has not purchased any players yet.
+              </p>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="content"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+            >
+              {activeTab === "my_team" && myTeamAnalytics && (
+                <div className="space-y-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <motion.div
+                      className="bg-black/30 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
+                      whileHover={{ y: -5 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <h2 className="text-2xl font-semibold mb-6 text-white flex items-center gap-3">
+                        <span>🎯</span> Spend by Role
+                      </h2>
+                      <AnimatedPieChart
+                        data={rolePieData}
+                        colors={COLORS}
+                        height={320}
+                      />
+                    </motion.div>
+
+                    <motion.div
+                      className="bg-black/30 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
+                      whileHover={{ y: -5 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 300,
+                        delay: 0.1,
                       }}
-                      itemStyle={{ color: "#E2E8F0" }}
-                      labelStyle={{ color: "#CBD5E0" }}
+                    >
+                      <h2 className="text-2xl font-semibold mb-6 text-white flex items-center gap-3">
+                        <span>🌍</span> Spend by Nationality
+                      </h2>
+                      <AnimatedPieChart
+                        data={nationPieData}
+                        colors={NATION_COLORS}
+                        height={320}
+                      />
+                    </motion.div>
+                  </div>
+
+                  <motion.div
+                    className="bg-black/30 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <h2 className="text-2xl font-semibold mb-6 text-white flex items-center gap-3">
+                      <span>📈</span> Team Analysis
+                    </h2>
+                    <motion.p
+                      className="text-gray-300 text-lg leading-relaxed"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.6 }}
+                      dangerouslySetInnerHTML={{
+                        __html: generateTeamAnalysis(
+                          myTeamAnalytics,
+                          tournamentData
+                        ).replace(
+                          /\*\*(.*?)\*\*/g,
+                          '<strong class="text-yellow-400 font-semibold">$1</strong>'
+                        ),
+                      }}
                     />
-                    <Legend wrapperStyle={{ color: "#E2E8F0" }} />
-                    <Bar
-                      dataKey="roleSpend.Batters"
-                      stackId="a"
-                      fill={COLORS[0]}
-                      name="Batters"
-                    />
-                    <Bar
-                      dataKey="roleSpend.Allrounders"
-                      stackId="a"
-                      fill={COLORS[1]}
-                      name="Allrounders"
-                    />
-                    <Bar
-                      dataKey="roleSpend.Bowlers"
-                      stackId="a"
-                      fill={COLORS[2]}
-                      name="Bowlers"
-                    />
-                    <Bar
-                      dataKey="roleSpend.Wicketkeepers"
-                      stackId="a"
-                      fill={COLORS[3]}
-                      name="Wicketkeepers"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </>
-        )}
+                  </motion.div>
+                </div>
+              )}
+
+              {activeTab === "top_buys" && (
+                <div className="space-y-12">
+                  {Object.entries(leagueTopBuys).map(
+                    ([role, players]) =>
+                      players &&
+                      players.length > 0 && (
+                        <motion.div
+                          key={role}
+                          className="bg-black/30 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
+                          initial={{ opacity: 0, y: 30 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.6 }}
+                        >
+                          <h3 className="text-3xl font-bold mb-8 text-center tracking-wider bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                            ⭐ Top 5 {role}
+                          </h3>
+                          <div className="flex flex-wrap gap-6 justify-center">
+                            <AnimatePresence>
+                              {players.map((p, index) => (
+                                <PlayerCard
+                                  key={p._id}
+                                  player={p}
+                                  accentColor={p.teamAccent}
+                                  index={index}
+                                />
+                              ))}
+                            </AnimatePresence>
+                          </div>
+                        </motion.div>
+                      )
+                  )}
+                </div>
+              )}
+
+              {activeTab === "league_comparison" && (
+                <motion.div
+                  className="bg-black/30 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl"
+                  initial={{ opacity: 0, x: 30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.7 }}
+                >
+                  <h2 className="text-2xl font-semibold mb-6 text-white flex items-center gap-3">
+                    <span>🏆</span> League Spend Comparison by Role
+                  </h2>
+                  <AnimatedBarChart data={allTeamStats} />
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   );
 }
