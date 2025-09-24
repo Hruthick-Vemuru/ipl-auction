@@ -16,3 +16,21 @@ export const getTextColorForBackground = (hexColor) => {
     return "#000000";
   }
 };
+
+export const shortenName = (name) => {
+  if (!name) return "";
+  const nameParts = name.split(" ");
+  if (nameParts.length === 1) {
+    return name;
+  }
+  const firstName = nameParts[0];
+  const lastName = nameParts[nameParts.length - 1];
+  let middleInitial = "";
+  if (nameParts.length > 2) {
+    middleInitial = nameParts
+      .slice(1, -1)
+      .map((part) => part.charAt(0))
+      .join("");
+  }
+  return `${firstName.charAt(0)}${middleInitial} ${lastName}`;
+};
